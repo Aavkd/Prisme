@@ -1,0 +1,18 @@
+{
+    "name": "Prisme · Catalogue UI",
+    "short_name": "Prisme UI",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#101216",
+    "theme_color": "#101216",
+    "description": "Catalogue local des composants Prisme.",
+    "orientation": "any",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "favicon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        }
+    ]
+}

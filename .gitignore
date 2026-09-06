@@ -1,0 +1,14 @@
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+.vscode/
+**/android/local.properties
+**/android/key.properties
+**/android/.gradle/
+**/windows/flutter/ephemeral/
+**/coverage/
+__pycache__/
+.DS_Store
