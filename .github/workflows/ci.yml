@@ -1,0 +1,55 @@
+name: Foundation
+on: [push, pull_request]
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: prisme
+          POSTGRES_DB: prisme_test
+          POSTGRES_PASSWORD: isolated-ci-fixture-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U prisme -d prisme_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      PRISME_TEST_DATABASE_URL: postgres://prisme:isolated-ci-fixture-only@localhost:5432/prisme_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: test -z "$(gofmt -l cmd internal)"
+      - run: go vet ./...
+      - run: go test -race -count=1 ./...
+      - run: go build ./...
+      - run: docker compose -f deploy/compose.dev.yml config --quiet
+      - run: docker build --target api -f deploy/Dockerfile -t prisme-ci-api .
+
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install openapi-spec-validator==0.7.2
+      - run: python -m openapi_spec_validator contracts/openapi.json
+
+  flutter:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the validated Flutter SDK
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch 3.38.5 https://github.com/flutter/flutter.git "$env:RUNNER_TEMP/flutter"
+          if ($LASTEXITCODE -ne 0) { throw 'Flutter checkout failed' }
+          "$env:RUNNER_TEMP/flutter/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - run: ./tool/verify.ps1 -BuildWindows
+        shell: pwsh

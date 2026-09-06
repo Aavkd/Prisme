@@ -12,3 +12,11 @@ build/
 **/coverage/
 __pycache__/
 .DS_Store
+.dev/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.exe
+!**/gradle-wrapper.jar

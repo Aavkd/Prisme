@@ -35,3 +35,15 @@ try {
         }
     } finally { Pop-Location }
 } finally { Pop-Location }
+
+Push-Location (Join-Path $PSScriptRoot '../apps/prisme_client')
+try {
+    Invoke-Check -Command flutter -Arguments @('pub', 'get')
+    Invoke-Check -Command dart -Arguments @('run', '../../tool/generate_api.dart', '--check')
+    Invoke-Check -Command dart -Arguments @('format', '--output=none', '--set-exit-if-changed', 'lib', 'test', 'tool', 'integration_test')
+    Invoke-Check -Command flutter -Arguments @('analyze', '--no-pub')
+    Invoke-Check -Command flutter -Arguments @('test', '--no-pub')
+    if ($BuildWindows) {
+        Invoke-Check -Command flutter -Arguments @('build', 'windows', '--release', '--no-pub', '--dart-define=PRISME_DEVELOPMENT=true')
+    }
+} finally { Pop-Location }

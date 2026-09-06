@@ -2,12 +2,12 @@
 
 ## Spécification produit, fonctionnelle et technique
 
-**Version :** 0.6  
+**Version :** 0.8\
 **Date de création :** 4 septembre 2026  
 **Dernière mise à jour :** 6 septembre 2026  
-**Statut :** document vivant — direction visuelle validée, socle UI développé, conception métier en cours  
+**Statut :** document vivant — socle UI et fondation locale phase 0 implémentés ; production non autorisée par le diagnostic\
 **Propriétaire :** Mantara  
-**Nom du produit :** à définir  
+**Nom du produit :** Prisme provisoire ; nom définitif à définir\
 **Clients cibles :** Android et Windows  
 **Déploiement cible :** auto-hébergé sur une tour Windows, avec services Linux conteneurisés  
 
@@ -278,7 +278,10 @@ Conséquences :
 
 La tour Windows sera la machine d'hébergement finale du centre de contrôle.
 
-Son diagnostic reste à effectuer. Il devra relever au minimum :
+Le diagnostic a été réalisé le 6 septembre 2026 et est conservé dans
+[DIAGNOSTIC_TOUR_WINDOWS.md](DIAGNOSTIC_TOUR_WINDOWS.md). Il conclut à un **NO-GO
+production temporaire**, notamment pour stockage, maintenance OS, pare-feu,
+sauvegarde et reprise autonome. Il couvre les points suivants :
 
 - édition et version de Windows ;
 - CPU, mémoire et architecture ;
@@ -293,8 +296,9 @@ Son diagnostic reste à effectuer. Il devra relever au minimum :
 - état de Cloudflare Tunnel ;
 - contraintes antivirus et pare-feu.
 
-La cible privilégiée est d'exécuter le control plane dans des conteneurs Linux via
-WSL2 ou une VM Linux dédiée. Le choix final dépendra du diagnostic. Un agent natif
+L'ADR [0001](docs/adr/0001-phase-zero-runtime.md) retient WSL2/Docker Desktop pour
+le développement et une VM Linux dédiée comme cible d'exploitation, conditionnée
+à la levée du NO-GO et à la qualification du démarrage/capacité. Un agent natif
 Windows distinct pourra superviser l'hôte sans donner au control plane un accès
 administrateur Windows permanent.
 
@@ -1738,12 +1742,24 @@ tâches partagent un processus, la consommation non attribuable reste au niveau 
 processus ou de la machine. Les tâches et sous-tâches gardent leur relation parentale
 pour éviter de compter deux fois la même consommation.
 
-### Relevé local et qualification proposés
+### Relevé local et qualification initiale
 
 Le 5 septembre 2026, les commandes de version et d'aide du poste actuel indiquent
 `codex-cli 0.144.1` et `Claude Code 2.1.207`. La commande Codex App Server est présente
 et annoncée expérimentale par l'aide locale. Ces versions ne désignent ni celles de
 la future tour, ni la version du moteur embarqué dans l'application Windows.
+
+La passe phase 0 du 6 septembre confirme ces versions et exporte le schéma local
+Codex : lecture/reprise de tâche, consigne avec `expectedTurnId`, interruption,
+tokens et quotas ont des interfaces identifiées. L'aide Claude confirme les modes
+print/stream-json, reprise, agents en arrière-plan et remote-control. Le détail
+et la matrice par mode sont dans
+[docs/CONNECTOR_QUALIFICATION.md](docs/CONNECTOR_QUALIFICATION.md).
+
+Cette qualification est documentaire et locale : aucun adaptateur Prisme n'est
+activé, aucune session existante n'a été pilotée et aucun mode de facturation du
+compte n'a été testé. Les capacités des sessions déjà ouvertes restent indisponibles
+tant que le rattachement effectif n'est pas démontré pour chaque mode.
 
 Le prototype devra vérifier sur les versions réellement utilisées :
 
@@ -2951,8 +2967,8 @@ Les layouts mobile et desktop doivent rester distincts lorsque l'usage le justif
 
 Responsabilités exclues des clients :
 
-- connexion SSH directe dans l'architecture normale ; le transport du mode secours
-  reste à arbitrer en section 10.13, sans exception technique validée à ce stade ;
+- connexion SSH directe dans l'architecture normale ; le mode secours est conçu
+  séparément en section 10.13 et ADR 0002, sans implémentation dans cette phase ;
 - stockage permanent de secrets d'infrastructure ;
 - exécution autonome de déploiements ;
 - décision de remédiation ;
@@ -2962,8 +2978,11 @@ Responsabilités exclues des clients :
 
 **État au 6 septembre 2026 :** `packages/prisme_ui` est une bibliothèque locale
 Flutter de présentation, version **0.1.0**. Elle prépare les écrans Android et
-Windows. Les pages métier et les autres couches de la liste ci-dessus ne sont pas
-encore développées au titre de ce chantier.
+Windows. Le client **`apps/prisme_client` 0.1.0+1** réutilise désormais cette base
+pour la connexion locale et la consultation réelle des agents de test. Son
+transport et son état métier résident dans l'application, hors de `prisme_ui`.
+L'accueil métier, les fiches Serveurs/Workers et les autres modules V1 restent à
+développer ; l'écran de fondation ne les remplace pas.
 
 | Emplacement depuis la racine du dépôt | Rôle |
 |---|---|
@@ -2978,6 +2997,10 @@ encore développées au titre de ce chantier.
 | [docs/FRONTEND_FOUNDATIONS.md](docs/FRONTEND_FOUNDATIONS.md) | Frontières de responsabilité et méthode d'assemblage d'un écran |
 | [docs/UI_VALIDATION.md](docs/UI_VALIDATION.md) | Résultats datés des vérifications et limites |
 | [tool/verify.ps1](tool/verify.ps1) | Commande commune de vérification depuis la racine |
+| [apps/prisme_client/lib/main.dart](apps/prisme_client/lib/main.dart) | Application native de fondation, activation explicite du mode développement |
+| [apps/prisme_client/lib/foundation](apps/prisme_client/lib/foundation) | Écran et contrôleur de connexion, liste réelle des agents, états d'erreur |
+| [apps/prisme_client/lib/api](apps/prisme_client/lib/api) | Modèles/méthodes générés et transport TLS avec session en mémoire |
+| [docs/PHASE_0.md](docs/PHASE_0.md) | Démarrage, agent local, validation native, preuves et limites de phase 0 |
 
 Le catalogue est une application de développement avec des données fictives et
 des actions locales. Ses rubriques ne sont pas la navigation produit. Son runner
@@ -3095,7 +3118,10 @@ ou de dupliquer le shell.
 
 `prisme_ui` est une couche de présentation. Les connexions réseau, OpenAPI,
 SSE/WebSocket, cache, stockage sécurisé, authentification, autorisations et logique
-métier restent dans les couches correspondantes du futur client et du backend.
+métier appartiennent aux couches correspondantes du client et du backend.
+En phase 0, les appels REST/TLS et la session locale sont implémentés dans
+`apps/prisme_client/lib/api` et `lib/foundation`. Les flux temps réel, le cache
+chiffré, les passkeys et les autorisations métier de production restent à construire.
 Le choix du routeur et de la gestion d'état métier n'est pas imposé par le catalogue.
 
 Règles à conserver lors du raccordement :
@@ -3181,13 +3207,50 @@ texte en Matrix à 320 px et en clair à 1 024 px. Une revue navigateur réelle 
 également vérifié les thèmes, les cartes mobiles, le menu Plus et l'inspecteur.
 Le détail est conservé dans [docs/UI_VALIDATION.md](docs/UI_VALIDATION.md).
 
-Ces résultats sont un état daté, à revalider selon les changements. Ils ne prouvent
-pas une exécution native validée sur les appareils cibles ni un audit complet
-WCAG/TalkBack/Narrateur. La compilation Android reste à faire : le diagnostic
+Ces résultats du catalogue sont un état daté, à revalider selon les changements.
+La phase 0 ajoute **2 tests du client**, un **test d'intégration Windows natif
+contre le backend Go réel** et un **build release Windows x64 réussi**. Le test
+natif couvre la connexion par champ masqué, la lecture authentifiée et la
+déconnexion. Les 13 tests du package et 9 du catalogue ont également été relancés
+avec succès, soit 24 tests de widgets/client en plus du scénario natif.
+
+Cela ne constitue pas une validation de tous les parcours natifs ni un audit
+complet WCAG/TalkBack/Narrateur. La compilation Android reste à faire : le diagnostic
 local a relevé les `cmdline-tools` manquants et un statut de licences SDK inconnu.
 La distribution, les signatures et l'identité finale restent également à préparer.
 
+### 10.2.8 Application de fondation disponible
+
+Depuis la racine : `./tool/dev.ps1`, puis `./tool/run-client.ps1`. Le guide
+[PHASE_0](docs/PHASE_0.md) décrit la connexion au secret local, l'agent optionnel,
+Android via ADB et les commandes de vérification. Le lancement embarque seulement
+la CA publique de développement ; les credentials ne doivent jamais être placés
+dans les dart-defines ou assets.
+
+L'écran FR/EN permet la connexion, la lecture de l'identité et des agents avec
+date de dernière lecture/heartbeat, la pagination, l'actualisation et la
+déconnexion. Il affiche les refus d'authentification et pertes de connexion sans
+présenter une lecture échouée comme une connexion vérifiée. Les tokens restent
+en mémoire. Les préférences visuelles/langue sont locales à l'exécution dans cet
+incrément ; leur persistance par appareil et celle de la sélection d'accueil
+restent à implémenter en phase 1.
+
+L'identifiant Android `dev.mantara.prisme_client` et le nom Prisme sont provisoires.
+Le runner Android possède la permission Internet et désactive le backup, mais
+n'a pas encore été validé sur le téléphone. Il n'existe aucun runner web produit.
+
 ## 10.3 Backend Go
+
+**Implémentation phase 0 :** Go 1.26.8, exécutable `cmd/api`, modules
+`internal/api`, `internal/store`, `internal/pki` et `internal/config`.
+Le serveur expose la fondation d'identité de développement et d'agent ; les
+domaines listés ci-dessous constituent l'architecture cible, pas des modules
+déjà livrés. Les conventions sont dans [docs/CONVENTIONS.md](docs/CONVENTIONS.md).
+
+PostgreSQL conserve `sessions`, `agents`, `enrollment_tokens`, `audit_events` et
+`schema_migrations`. La migration 001 est explicite, transactionnelle et protégée
+par verrou ; le serveur refuse un schéma incompatible ou non migré. Ce schéma
+minimal n'implémente pas encore les entités utilisateur/appareil/passkey de la V1.
 
 Le backend regroupe initialement plusieurs modules dans un monolithe modulaire afin de
 réduire la complexité opérationnelle. Les limites internes doivent être explicites :
@@ -3214,6 +3277,30 @@ mesurée, pas par anticipation.
 
 ## 10.4 API
 
+**Contrat disponible :** [contracts/openapi.json](contracts/openapi.json), OpenAPI
+3.1, version 0.1.0. `tool/generate_api.dart` génère les DTO et méthodes Dart ;
+`--check` détecte une dérive. Le transport TLS et les règles de session restent
+écrits dans le client. Le générateur est limité aux formes utilisées dans ce contrat.
+
+| Route livrée | Protection et comportement |
+|---|---|
+| `GET /healthz`, `GET /readyz` | Santé du processus et disponibilité PostgreSQL |
+| `POST /v1/dev/sessions` | Secret local explicite, session de 60 minutes |
+| `GET /v1/me`, `DELETE /v1/session` | Session bearer ; lecture de l'identité / révocation |
+| `GET /v1/agents` | Session bearer ; curseur opaque, 50 agents maximum par page |
+| `POST /v1/enrollment-tokens` | Session bearer + clé d'idempotence ; token de 10 minutes |
+| `POST /v1/agent/enroll` | Token, CSR P-256 signée et protocole `1` ; certificat client de 24 heures |
+| `POST /v1/agent/heartbeat` | mTLS et identité active vérifiée en base ; capacité `self:heartbeat` seule |
+
+TLS 1.3, corps JSON de 16 Kio maximum, champs inconnus refusés, limite globale
+locale de 120 requêtes/minute hors sondes de santé et timeouts bornés. Le mode
+`PRISME_MODE=development` est obligatoire ; aucun mode de production ni tunnel
+n'est livré. Les tokens de session et d'enrôlement sont stockés en empreintes.
+Les erreurs applicatives sont structurées, sans corps de requête ni secret journalisé.
+
+Les exigences suivantes restent la cible générale de la V1. WebSocket, webhooks
+et contrôle optimiste des futures mutations métier ne sont pas livrés en phase 0 :
+
 - REST JSON documenté avec OpenAPI pour les opérations structurées ;
 - WebSocket pour terminaux, flux de logs, progression et événements temps réel ;
 - versionnement explicite ;
@@ -3227,6 +3314,23 @@ mesurée, pas par anticipation.
 - génération du client Dart depuis le contrat.
 
 ## 10.5 Agent Go
+
+**Implémentation phase 0 :** `cmd/agent` et `internal/agent`, contrat
+[contracts/agent-v1.md](contracts/agent-v1.md). Le binaire génère et conserve sa
+clé/CSR localement, s'enrôle en TLS, puis envoie son heartbeat en mTLS toutes les
+30 secondes. Au redémarrage il réutilise son certificat encore valide. Le rejeu
+exact d'un enrôlement récupère le même certificat public ; une autre clé ou un
+autre nom ne peut pas réutiliser le token consommé.
+
+Le conteneur de test fonctionne comme UID 10001, racine en lecture seule,
+`cap_drop: ALL`, `no-new-privileges`, volume d'identité privé et aucun port entrant.
+Il n'a ni socket Docker, ni shell, ni privilèges administrateur, ni accès aux fichiers
+de l'hôte. Sa seule capacité annoncée est `self:heartbeat`.
+
+Le renouvellement automatique, l'administration de la révocation, l'installation
+en service, l'inventaire et les capacités ci-dessous restent à implémenter.
+La présence de la colonne de révocation en base et son contrôle à chaque appel
+ne constituent pas encore une interface d'administration complète.
 
 L'agent est un binaire léger installé comme :
 
@@ -3407,8 +3511,10 @@ notification décrite en section 7.12 ; elle ne prouve pas une panne des sites.
 ## 10.13 Accès de secours indépendant vers le VPS
 
 **Décision produit validée le 5 septembre 2026 :** pouvoir diagnostiquer et intervenir
-sur le VPS depuis l'application lorsque la tour est éteinte ou déconnectée. Le choix
-du transport et de l'authentification reste ouvert.
+sur le VPS depuis l'application lorsque la tour est éteinte ou déconnectée.
+L'ADR [0002](docs/adr/0002-independent-recovery.md) précise désormais la cible de
+conception : passerelle native sur VPS, tunnel/Access propres et identité indépendante.
+Elle n'est pas déployée en phase 0 ; ses scénarios de validation restent en phase 6.
 
 ### Contrat d'indépendance proposé
 
@@ -3441,9 +3547,9 @@ passerelle disposerait de sa propre identité limitée au VPS, sans copie du cof
 général. Elle doit pouvoir fonctionner malgré une panne des conteneurs applicatifs
 ou du Caddy mutualisé.
 
-Cette option est une proposition de conception, pas un choix validé. Une connexion
-SSH du client par réseau privé reste une alternative à comparer. L'arbitrage doit
-couvrir l'authentification initiale sans la tour, les appareils révoqués, l'expiration
+Cette option est retenue comme cible de conception dans l'ADR 0002, sans activation.
+Une connexion SSH par réseau privé reste une voie opérateur externe distincte.
+La qualification devra couvrir l'authentification initiale sans la tour, les appareils révoqués, l'expiration
 des sessions, la conservation des clés et le cas où Cloudflare est lui-même
 indisponible. Le secours ne constitue pas une haute disponibilité du control plane
 et ne garantit pas l'accès à un VPS lui-même arrêté ou sans réseau.
@@ -3945,6 +4051,21 @@ Les versions minimales exactes seront fixées lors du bootstrap technique.
 
 ## 16. Stratégie de déploiement du produit lui-même
 
+**État phase 0 :** environnement local `deploy/compose.dev.yml`, projet
+`prisme-dev`, composé de PostgreSQL, d'une migration ponctuelle, de l'API et d'un
+profil agent optionnel. Seule l'API est publiée sur `127.0.0.1:8443` ; PostgreSQL
+et l'agent n'exposent pas de port hôte. `tool/dev.ps1` génère les secrets privés
+dans `.dev`, applique leurs ACL Windows et démarre la stack. `-Stop` arrête ce
+projet en préservant les données. La stratégie détaillée de secrets et les limites
+locales sont dans [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) et
+[docs/PHASE_0.md](docs/PHASE_0.md).
+
+La CI de base est définie dans [.github/workflows/ci.yml](.github/workflows/ci.yml) :
+Go/vet/race avec PostgreSQL éphémère, validation OpenAPI et vérifications Flutter
+avec compilation Windows. Le workflow est livré, sans exécution GitHub distante
+revendiquée. Les builds locaux sont de développement ; signature de distribution,
+mise à jour automatique et rollback de production ci-dessous restent des cibles V1.
+
 Le produit doit savoir se mettre à jour sans se rendre irrécupérable.
 
 ### Control plane
@@ -3983,42 +4104,55 @@ Chaque phase doit produire un incrément utilisable et testable.
 
 ## Phase 0 — Fondation et décisions bloquantes
 
-Avancement UI au 6 septembre 2026 : direction et accueil validés, palettes,
-bibliothèque `prisme_ui` et catalogue de développement disponibles (section 10.2).
-Cette base doit être réutilisée. Elle ne remplit pas à elle seule le critère de
-sortie de la phase 0 : client authentifié, backend local et enrôlement restent
-à réaliser.
+Avancement au 6 septembre 2026 : fondation locale implémentée dans ce monorepo.
+`apps/prisme_client` réutilise `prisme_ui` pour une connexion de développement,
+la lecture authentifiée du backend Go et la liste réelle des agents de test.
+PostgreSQL, TLS, sessions courtes, enrôlement par CSR et heartbeat mTLS sont
+opérationnels. Le critère de sortie local est vérifié sur Windows natif ; les
+résultats et limites sont dans [docs/PHASE_0.md](docs/PHASE_0.md).
 
-### Livrables
+Prisme reste **provisoire à la demande de l'utilisateur** ; aucun nom commercial,
+identifiant Android définitif ou domaine n'est réservé. Le diagnostic de la tour
+est terminé, mais son NO-GO production reste applicable. WSL2 local / VM Linux
+cible, conventions, modèle de menaces, contrats et CI sont documentés dans les ADR
+et guides. Le nom définitif et la qualification opérationnelle de production ne
+sont pas considérés clos par cette livraison locale.
 
-- diagnostic de la tour Windows ;
-- choix WSL2 ou VM Linux ;
-- nom du produit et nom technique ;
-- monorepo ;
-- conventions ;
-- design tokens initiaux — disponibles dans `design/tokens.json` et `prisme_ui` ;
-- contrats OpenAPI et agent ;
-- modèle de menaces initial ;
-- environnement Compose de développement ;
-- CI de base ;
-- stratégie de secrets de développement.
+### Livrables et statut
 
-Compléments proposés en v0.4, précisés en v0.5 : qualifier les interfaces de Codex
-Windows/CLI et Claude Code pour observation et pilotage avec les abonnements actuels ;
-arbitrer l'accès de secours, son authentification indépendante et sa coordination
-avec les opérations normales.
+| Livrable | État / référence |
+|---|---|
+| Diagnostic tour Windows | Terminé avant implémentation ; [rapport existant](DIAGNOSTIC_TOUR_WINDOWS.md), NO-GO production conservé |
+| WSL2 ou VM Linux | Choix d'architecture documenté : WSL2 local / VM cible conditionnelle, [ADR 0001](docs/adr/0001-phase-zero-runtime.md) ; aucune VM installée |
+| Nom produit / technique | Prisme et identifiants locaux provisoires, selon demande utilisateur ; identité définitive différée |
+| Monorepo / conventions | Go et Flutter structurés ; [conventions](docs/CONVENTIONS.md) |
+| Design tokens | Base existante `design/tokens.json` et `packages/prisme_ui` réutilisée |
+| Contrats | [OpenAPI 3.1](contracts/openapi.json), génération Dart et [agent v1](contracts/agent-v1.md) |
+| Modèle de menaces | [Modèle initial](docs/THREAT_MODEL.md), contrôles et limites locales explicites |
+| Compose développement | [Stack locale](deploy/compose.dev.yml), migration explicite et agent optionnel |
+| CI de base | [Workflow](.github/workflows/ci.yml) ajouté ; résultats locaux acquis, exécution distante non vérifiée |
+| Secrets développement | Génération aléatoire, fichiers `.dev` ignorés et ACL Windows ; aucune clé privée dans les images ou le client |
+| Qualification outils IA | [Rapport initial](docs/CONNECTOR_QUALIFICATION.md) ; interfaces identifiées, pilotage et sessions existantes non qualifiés |
+| Accès de secours | [ADR 0002](docs/adr/0002-independent-recovery.md) : identité indépendante, audit et coordination conçus ; réalisation en phase 6 |
 
 ### Critère de sortie
 
 Un client Flutter authentifié appelle un backend Go local, et un agent de test s'enrôle
-sans disposer de privilèges inutiles.
+sans disposer de privilèges inutiles. **Vérifié en développement** : session locale
+de 60 minutes, certificat agent de 24 heures, capacité unique `self:heartbeat`.
+Passkeys, inventaire réel, rotation et authentification de production restent en phase 1.
 
 ## Phase 1 — Flotte, identité et inventaire
+
+La phase 1 prolonge les contrats et modules livrés ; elle ne doit pas recréer le
+client, le monorepo, les migrations ou le socle UI. La session de développement
+ne doit pas devenir implicitement l'authentification de production. L'enrôlement
+de test doit évoluer vers le cycle de vie complet d'une identité de serveur.
 
 ### Livrables
 
 - passkeys, sessions, appareils et récupération ;
-- enrôlement d'agent ;
+- enrôlement de serveur, renouvellement des certificats et révocation administrable ;
 - inventaire serveur ;
 - découverte Docker et Compose ;
 - capacités ;
@@ -4455,11 +4589,13 @@ Une fonctionnalité distante n'est pas terminée si :
 | Vulnérabilités | V2 |
 | Hors connexion mobile | Cache en lecture seule ; accès de secours distinct si le VPS est joignable |
 | Notifications critiques | Urgences telles que site inaccessible ou traitements audio bloqués ; passent les horaires silencieux applicatifs |
-| Accès de secours | Diagnostic et intervention sur le VPS même si la tour est indisponible ; architecture à arbitrer |
+| Accès de secours | Diagnostic et intervention sur le VPS même si la tour est indisponible ; passerelle native indépendante, ADR 0002, non déployée |
 | Wake-on-LAN | Réveil de la tour prévu ultérieurement ; matériel, chemin réseau et version à définir |
 | Récupération | Passkey Windows et codes à usage unique |
 | Application Windows | Même niveau de pouvoir qu'Android |
-| Nom | À définir ultérieurement |
+| Nom | Prisme provisoire ; identité définitive à définir ultérieurement |
+| Runtime Linux | WSL2 en développement ; VM Linux dédiée cible après levée du NO-GO, ADR 0001 |
+| Authentification phase 0 | Secret local explicite, session courte ; aucun mode production livré |
 
 ---
 
@@ -4469,8 +4605,8 @@ Une fonctionnalité distante n'est pas terminée si :
 
 1. Nom produit, identifiant technique et nom de package Android.
 2. Sous-domaine utilisé par l'API.
-3. Diagnostic complet de la tour Windows.
-4. Choix WSL2 ou VM Linux sur la tour.
+3. Lever les blocages du diagnostic de la tour Windows déjà effectué.
+4. Qualifier le boot autonome et la capacité de la VM Linux cible (ADR 0001).
 5. Capacité disque nécessaire et stockage dédié.
 6. Destination de sauvegarde hors site.
 7. Registre d'images actuel et cible, probablement GHCR à confirmer.
@@ -4479,10 +4615,10 @@ Une fonctionnalité distante n'est pas terminée si :
 10. Jetons Cloudflare en lecture et écriture, zones autorisées.
 11. Stratégie exacte du watchdog lorsque la tour est hors ligne.
 12. Stratégie de mise à jour de l'application Windows.
-13. Transport, authentification et révocation de l'accès de secours sans dépendance
-    à la tour ; vérifier le cas d'une session normale expirée.
-14. Stockage local de l'audit de secours et coordination des actions lors du retour
-    du control plane.
+13. Implémenter et qualifier le transport et l'identité de secours de l'ADR 0002,
+    notamment avec session normale expirée et appareil révoqué.
+14. Implémenter et tester l'audit local, le fencing et la réconciliation de secours
+    définis dans l'ADR 0002.
 
 ### À affiner pendant la conception
 
@@ -4511,6 +4647,34 @@ Une fonctionnalité distante n'est pas terminée si :
 ---
 
 ## 23. Journal des décisions
+
+### 6 septembre 2026 — consolidation de la spécification après phase 0 (v0.8)
+
+À la demande de l'utilisateur, les sections techniques sont synchronisées avec
+l'implémentation : application de fondation, routes disponibles, schéma SQL minimal,
+identité mTLS, environnement local, secrets, CI et preuves de validation. Le tableau
+de phase 0 distingue livraisons, décisions de conception et qualifications ouvertes.
+La reprise de phase 1 part des composants livrés. Prisme reste provisoire ; le
+NO-GO de la tour, Android natif, les sessions IA et le secours déployé restent
+explicitement ouverts. Cette consolidation documentaire n'ajoute aucun déploiement.
+
+### 6 septembre 2026 — fondation locale phase 0 (v0.7)
+
+L'utilisateur demande l'implémentation de la phase 0 en réutilisant le diagnostic
+Windows déjà réalisé, et confirme que Prisme doit rester un nom provisoire.
+
+Livraison : monorepo Go/Flutter, API TLS locale, PostgreSQL avec migration explicite,
+authentification de développement et révocation de session, token d'enrôlement
+consommable, certificat client agent et heartbeat seul, Compose isolé, OpenAPI 3.1,
+génération Dart, conventions, modèle de menaces et CI. Le client Windows natif
+est testé contre le backend réel. Le guide `docs/PHASE_0.md` conserve les preuves.
+
+Choix d'implémentation : WSL2 local, VM Linux cible après remise à niveau de la tour ;
+passerelle de secours native indépendante à implémenter en phase 6. La qualification
+Codex/Claude distingue interfaces disponibles, sessions existantes non qualifiées
+et absence d'activation de pilotage. Aucun service distant, tunnel, pare-feu,
+compte IA ou dépôt pilote n'est modifié. Les passkeys et privilèges d'inventaire
+restent en phase 1 ; le succès local ne vaut pas autorisation de production.
 
 ### 6 septembre 2026 — direction artistique validée et socle UI Flutter (v0.6)
 
@@ -4645,10 +4809,19 @@ aucune configuration d'infrastructure n'a été déployé au titre de cette pass
 
 ## 25. Prochaines étapes de conception et de développement
 
-La direction graphique et l'accueil sont validés, et le socle Flutter est développé.
-La consigne antérieure de poursuivre uniquement la conception sans coder ne décrit
-plus cet avancement. Les futures tâches frontend DOIVENT partir de la bibliothèque
-et du catalogue de la section 10.2.
+La direction graphique et l'accueil sont validés, le socle Flutter est développé
+et le critère de sortie **logiciel local de phase 0 est vérifié**. Le point de
+reprise comprend maintenant `apps/prisme_client`, les modules Go, les contrats,
+la migration PostgreSQL et le Compose local, en plus du catalogue de la section 10.2.
+Le [guide phase 0](docs/PHASE_0.md) conserve les commandes et preuves acquises.
+
+La prochaine étape logicielle est la phase 1 : identité de production et passkeys,
+appareils/récupération, cycle de vie des certificats, capacités, inventaire et vues
+Serveurs. Le premier résultat attendu reste l'apparition du VPS et de ses projets
+en lecture seule, selon le périmètre autorisé d'une prochaine tâche. La persistance
+des préférences par appareil et la qualification Android font partie du raccordement
+client à poursuivre. La remise à niveau de la tour constitue un chantier distinct
+avant hébergement de production ; son diagnostic n'est pas à recommencer.
 
 Pour une prochaine tâche d'écran, selon le périmètre confié par l'utilisateur :
 
@@ -4665,19 +4838,19 @@ Pour une prochaine tâche d'écran, selon le périmètre confié par l'utilisate
 Les autres chantiers de conception restent ouverts : stratégies blue-green des
 pilotes, migration de Sounding Lines vers des images immuables, traitement
 déclaratif de la dérive Compose/Caddy d'Arpent, format et validation du manifeste,
-diagnostic de la tour et ADR des choix techniques restants. Leurs interventions
+remédiation des blocages de la tour et qualification des ADR retenues. Leurs interventions
 sur l'infrastructure restent soumises aux règles de cible, plan et vérification.
 
-Priorités issues des passes v0.4 et v0.5 :
+Priorités complémentaires à poursuivre à partir des décisions déjà documentées :
 
 - qualifier Codex Windows/CLI et Claude Code pour le suivi et le pilotage avec les
   abonnements actuels, notamment sur les sessions déjà ouvertes ;
 - assembler en Flutter l'accueil « Mes machines / Mes workers » déjà validé en
   maquette sur Windows et Android ;
 - transformer les exemples d'urgence en règles testables avec délais validés ;
-- arbitrer le canal et l'identité de secours, puis valider le séquencement proposé
-  pour les workers et le secours dans le plan de développement ;
-- conserver le Wake-on-LAN comme évolution à préparer pendant le diagnostic matériel.
+- implémenter et qualifier en phase 6 le canal, l'identité, l'audit et la coordination
+  de secours retenus dans l'ADR 0002 ;
+- conserver le Wake-on-LAN comme évolution à qualifier à partir du diagnostic existant.
 
 Cette spécification et les guides locaux constituent désormais le point de reprise
 des agents de développement. Ils doivent évoluer avec le code, en distinguant

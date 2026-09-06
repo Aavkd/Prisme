@@ -1,0 +1,20 @@
+name: prisme-tests
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: prisme
+      POSTGRES_DB: prisme_test
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    ports: ["127.0.0.1:55432:5432"]
+    tmpfs: [/var/lib/postgresql/data]
+    mem_limit: 384m
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U prisme -d prisme_test"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+secrets:
+  db_password:
+    file: ../.dev/db-password

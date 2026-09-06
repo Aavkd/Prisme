@@ -1,0 +1,103 @@
+name: prisme-dev
+
+x-api: &api
+  image: prisme-dev-api:phase0
+  build:
+    context: ..
+    dockerfile: deploy/Dockerfile
+    target: api
+  user: "10001:10001"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 64
+  mem_limit: 256m
+  environment:
+    PRISME_MODE: development
+    PRISME_LISTEN: 0.0.0.0:8443
+    PRISME_DB_HOST: postgres:5432
+    PRISME_DB_PASSWORD_FILE: /run/secrets/db_password
+    PRISME_DEV_SECRET_FILE: /run/secrets/bootstrap_secret
+    PRISME_CA_FILE: /run/secrets/ca
+    PRISME_CA_KEY_FILE: /run/secrets/ca_key
+    PRISME_TLS_CERT_FILE: /run/secrets/tls_cert
+    PRISME_TLS_KEY_FILE: /run/secrets/tls_key
+  secrets: [db_password, bootstrap_secret, ca, ca_key, tls_cert, tls_key]
+  networks: [control]
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: prisme
+      POSTGRES_DB: prisme
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes: [database:/var/lib/postgresql/data]
+    networks: [control]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U prisme -d prisme"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    mem_limit: 384m
+    pids_limit: 128
+  migrate:
+    <<: *api
+    command: [-migrate]
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+  api:
+    <<: *api
+    networks: [control, client]
+    ports: ["127.0.0.1:8443:8443"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, /probe, -url, "https://localhost:8443/readyz", -ca, /run/secrets/ca]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  agent:
+    profiles: [agent]
+    image: prisme-dev-agent:phase0
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: agent
+    user: "10001:10001"
+    command: [-url, "https://api:8443", -ca, /run/secrets/ca, -token-file, /run/secrets/enrollment_token, -state-dir, /state, -name, compose-test-agent]
+    secrets: [ca, enrollment_token]
+    volumes: [agent_identity:/state]
+    networks: [control]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 64m
+    depends_on:
+      api: {condition: service_healthy}
+
+networks:
+  client: {}
+  control:
+    internal: true
+volumes:
+  database:
+  agent_identity:
+secrets:
+  db_password:
+    file: ../.dev/db-password
+  bootstrap_secret:
+    file: ../.dev/bootstrap-secret
+  ca:
+    file: ../.dev/pki/ca.pem
+  ca_key:
+    file: ../.dev/pki/ca-key.pem
+  tls_cert:
+    file: ../.dev/pki/server.pem
+  tls_key:
+    file: ../.dev/pki/server-key.pem
+  enrollment_token:
+    file: ../.dev/enrollment-token
