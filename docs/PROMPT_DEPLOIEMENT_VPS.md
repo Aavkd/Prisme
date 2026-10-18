@@ -31,6 +31,43 @@ tu vas faire avant de le faire.
 | Seuils sécurité | Normal (warning) : > 50 échecs SSH en 10 min. **Urgent** : connexion SSH réussie depuis une IP inconnue, ou fail2ban arrêté |
 | Watchdog | Deux instances simultanées (portable + tour), pas de relais. Un service externe viendra s'ajouter plus tard sur la même URL |
 
+## 2 bis. Où tu travailles : la tour (`desktop-ucq8srh`), Alexy est absent
+
+Alexy a développé Prisme sur son PC portable (`Portable_Alexy`) mais **tu poursuis le travail sur la tour
+Windows** : il est dans les transports puis indisponible par moments. Conséquences :
+
+**Prérequis à vérifier au tout début (lecture seule), à rapporter dans `docs/PHASE_10_VPS.md`**
+- Dépôt cloné depuis `https://github.com/Aavkd/Prisme.git` (branche `main`, dernier commit attendu ≥ `0f595db`).
+  Alexy a décidé d'utiliser le **disque `D:`** de la tour (c'est le seul qui a de la place) : clone, caches Go/Dart/Flutter,
+  données Docker Desktop/WSL y sont acceptés.
+- Outils : Go 1.26.8, Flutter 3.38.5, Docker Desktop (moteur Linux/WSL2), PostgreSQL (tests), `gh` connecté, `git`.
+- Accès au VPS : alias SSH `ovh-mantara` (utilisateur `ubuntu`) fonctionnel **depuis la tour**
+  (`ssh -o BatchMode=yes ovh-mantara true`). Si l'alias ou la clé manque, **arrête-toi et demande** : ne génère pas
+  de nouvelle clé de ta propre initiative.
+- Les secrets (`.dev/`, `google-services.json`, `prisme-49202-firebase-adminsdk-*.json`) **ne sont pas dans le dépôt**.
+  `./tool/dev.ps1` régénère les secrets de développement. Les fichiers Firebase ne servent qu'à l'**étape 6** (et au
+  build Android du client) : si Alexy ne les a pas encore déposés sur la tour, fais les étapes 1 à 5 puis arrête-toi
+  avant l'étape 6 en listant précisément ce qui manque. Ne les demande pas dans le chat, ne les copie pas, ne les committe jamais.
+
+**Le disque `D:` est dégradé** (112 événements « bad block » entre juin et août 2026, voir `DIAGNOSTIC_TOUR_WINDOWS.md`) :
+- **Pousse tes commits sur GitHub à chaque étape terminée** (Alexy a validé les push de ce dépôt vers `origin/main`
+  pour ce chantier) : GitHub est la seule vraie sauvegarde ; ne laisse jamais du travail non poussé en fin de session.
+- Aucun secret de production n'existe *uniquement* sur la tour : ils sont créés sur le VPS (`0600`) ; sur la tour il n'y a
+  que ce qui sert au watchdog (clé d'envoi FCM, ACL restreintes).
+- N'exécute pas `chkdsk`, réparation de disque, nettoyage Docker global (`docker system prune`) ni test de charge disque
+  sans l'accord d'Alexy ; ne remplis pas `D:` (surveille l'espace libre, note-le dans le journal).
+- Si des erreurs disque apparaissent (échecs de lecture/écriture, fichiers corrompus, événements ID 7), arrête-toi et signale-le.
+
+**Alexy n'est pas toujours joignable** : le « oui » demandé à la règle 1 du §5 peut tarder.
+- Fais d'abord tout ce qui est **local et sans effet sur le VPS** : étape 1 (tests, modifications du watchdog, binaires),
+  préparation des fichiers de configuration et des compose de l'étape 2, scripts de l'étape 5, documentation.
+- Pour une action qui modifie le VPS/DNS/Firebase : écris ce que tu veux faire dans `docs/PHASE_10_VPS.md`
+  (section « En attente d'accord »), pose la question dans le chat, **puis attends**. Ne passe pas à autre chose qui en dépend.
+- Le watchdog sera installé sur la tour par toi (tâche planifiée) ; l'installation sur le **portable** est un script +
+  procédure écrits par toi mais **lancés par Alexy** (tu n'as pas accès à cette machine).
+- Attention : la tour devient à la fois machine de travail et veilleuse. Prévois et note ce qui se passe si elle redémarre
+  (la tâche planifiée doit repartir seule ; teste ce démarrage avec l'accord d'Alexy, pas un redémarrage de ta propre initiative).
+
 ## 3. État du projet à connaître
 
 - Dépôt `Aavkd/Prisme` (privé), branche `main`, tout est poussé (commit `1966abb`). Phases 0 à 9
@@ -147,13 +184,15 @@ se déclenche puis se résout.
   watchdog ; la clé reste hors dépôt. Enrôle le S24 (passkey + biométrie) et active les notifications du control plane.
 - Horaires silencieux d'Alexy (propose 22 h–7 h Europe/Paris) ; les règles `urgent` les traversent.
 - Watchdog : `url = https://prisme.mantara.fr/readyz`, `urgent: true`, `instance` = `portable` / `tour`, seuil 3.
-  Installe sur chaque machine Windows une **tâche planifiée au démarrage** (redémarrage automatique en cas d'échec,
-  droits minimaux, fichiers de configuration et clé en ACL restreintes, aucune écoute réseau). Pas de service Windows à écrire.
+  Installe sur la tour une **tâche planifiée au démarrage** (redémarrage automatique en cas d'échec,
+  droits minimaux, fichiers de configuration et clé en ACL restreintes, aucune écoute réseau). Pour le portable, prépare
+  le script d'installation et la procédure pas à pas qu'Alexy lancera lui-même. Pas de service Windows à écrire.
 - Explique à Alexy les limites : le portable dort ; la tour a eu 6 arrêts non propres en 90 jours ; deux notifications
   sont normales si les deux machines voient la panne.
-**Critère** : coupure contrôlée de l'URL (ex. arrêt du seul conteneur API de Prisme, jamais d'un autre service) → chaque
-instance active notifie le S24 (avec son libellé), puis notifie le rétablissement ; ouverture de la bonne fiche ; une alerte
-`urgent` passe bien la nuit simulée.
+**Critère** : coupure contrôlée de l'URL (ex. arrêt du seul conteneur API de Prisme, jamais d'un autre service, avec
+l'accord d'Alexy et à un moment où il peut la constater) → l'instance de la tour notifie le S24 (avec son libellé), puis
+notifie le rétablissement ; ouverture de la bonne fiche ; une alerte `urgent` passe bien la nuit simulée. L'instance du
+portable est validée par Alexy une fois le script lancé (note-le comme « non vérifié » tant que ce n'est pas fait).
 
 ### Étape 7 — Qualification et sauvegarde de Prisme
 - Test de bout en bout de la chaîne SSH : métrique synthétique → incident → FCM → S24 → acquittement (empreinte).
