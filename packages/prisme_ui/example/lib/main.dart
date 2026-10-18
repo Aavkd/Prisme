@@ -605,6 +605,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
   ];
   List<Widget> _data() => [
     PrismeDataTable<String>(
+      onOpen: (project) =>
+          message(t('Exemple ouvert : $project', 'Opened example: $project')),
       rows: const ['Sounding Lines', 'Arpent'],
       columns: [
         PrismeTableColumn(label: t('Projet', 'Project'), value: (v) => v),

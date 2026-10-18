@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 
 import 'generated.dart';
 
@@ -35,7 +37,81 @@ class ApiConnection {
   late final String _origin;
   late final HttpClient _http;
   String? token;
+  Future<void> Function(String, Map<String, dynamic>)? onRead;
   late final PrismeApi api = PrismeApi(send);
+
+  Future<WebSocket> openTerminalSocket(String id, String ticket) async {
+    if (!RegExp(r'^[a-f0-9]{64}$').hasMatch(id) || token == null) {
+      throw const ApiFailure('session_expired');
+    }
+    HttpClientRequest? pending;
+    Socket? upgraded;
+    final session = token;
+    var cancelled = false;
+    try {
+      return await (() async {
+        final request = await _http.openUrl(
+          'GET',
+          Uri.parse('$_origin/v1/operations/sessions/$id/stream'),
+        );
+        pending = request;
+        if (cancelled) {
+          request.abort();
+          throw const ApiFailure('timeout');
+        }
+        request.followRedirects = false;
+        final random = Random.secure();
+        final nonce = base64Encode(
+          List.generate(16, (_) => random.nextInt(256)),
+        );
+        request.headers
+          ..set('Authorization', 'Bearer $session')
+          ..set('X-Prisme-Terminal-Ticket', ticket)
+          ..set('Connection', 'Upgrade')
+          ..set('Upgrade', 'websocket')
+          ..set('Sec-WebSocket-Key', nonce)
+          ..set('Sec-WebSocket-Version', '13');
+        final response = await request.close();
+        final expected = base64Encode(
+          sha1
+              .convert(
+                utf8.encode('${nonce}258EAFA5-E914-47DA-95CA-C5AB0DC85B11'),
+              )
+              .bytes,
+        );
+        if (response.statusCode != 101 ||
+            response.headers.value('sec-websocket-accept') != expected ||
+            response.headers.value('upgrade')?.toLowerCase() != 'websocket' ||
+            response.headers.value('sec-websocket-extensions') != null ||
+            session != token ||
+            cancelled) {
+          final socket = await response.detachSocket();
+          socket.destroy();
+          throw const ApiFailure('terminal_disconnected');
+        }
+        upgraded = await response.detachSocket();
+        if (cancelled || session != token) {
+          upgraded!.destroy();
+          throw const ApiFailure('session_expired');
+        }
+        return WebSocket.fromUpgradedSocket(
+          upgraded!,
+          serverSide: false,
+          compression: CompressionOptions.compressionOff,
+        );
+      })().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          cancelled = true;
+          pending?.abort();
+          upgraded?.destroy();
+          throw const ApiFailure('timeout');
+        },
+      );
+    } catch (_) {
+      throw const ApiFailure('terminal_disconnected');
+    }
+  }
 
   Future<Map<String, dynamic>> send(
     String method,
@@ -64,16 +140,24 @@ class ApiConnection {
         final bytes = <int>[];
         await for (final chunk in response) {
           bytes.addAll(chunk);
-          if (bytes.length > 256 * 1024) {
+          if (bytes.length > 8 * 1024 * 1024) {
             throw const ApiFailure('invalid_response');
           }
         }
         if (response.statusCode == 401) token = null;
         if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw ApiFailure('request_rejected', response.statusCode);
+          String code = 'request_rejected';
+          try {
+            code = (jsonDecode(utf8.decode(bytes)) as Map)['code'] as String;
+          } catch (_) {}
+          throw ApiFailure(code, response.statusCode);
         }
         if (response.statusCode == 204) return <String, dynamic>{};
-        return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+        final data = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+        if (method == 'GET' && token != null && onRead != null) {
+          await onRead!(path, data);
+        }
+        return data;
       })().timeout(const Duration(seconds: 8));
     } on TimeoutException {
       pending?.abort();

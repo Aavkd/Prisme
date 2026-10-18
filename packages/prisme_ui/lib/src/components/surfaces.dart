@@ -142,16 +142,22 @@ class PrismeBrand extends StatelessWidget {
 }
 
 class PrismeKeyValue extends StatelessWidget {
-  const PrismeKeyValue({super.key, required this.label, required this.value});
+  const PrismeKeyValue({
+    super.key,
+    required this.label,
+    required this.value,
+    this.selectable = true,
+  });
   final String label;
   final String value;
+  final bool selectable;
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(label, style: Theme.of(context).textTheme.bodySmall),
       const SizedBox(height: 4),
-      SelectableText(value),
+      if (selectable) SelectableText(value) else Text(value),
     ],
   );
 }

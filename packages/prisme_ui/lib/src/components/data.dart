@@ -64,6 +64,7 @@ class PrismeDataTable<T> extends StatelessWidget {
                             child: PrismeKeyValue(
                               label: column.label,
                               value: column.value(row),
+                              selectable: onOpen == null,
                             ),
                           ),
                       ],

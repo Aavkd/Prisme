@@ -107,6 +107,7 @@ Un `PrismeActionPlan` précise la cible, l'environnement, l'impact, la vérifica
 - Les identifiants des destinations et des commandes doivent être uniques. Les callbacks et contrôleurs appartiennent à l'appelant.
 - `PrismeTextField` participe à un `Form` et à son validateur ; `PrismeSelect` est contrôlé via `value` / `onChanged`, avec erreur externe.
 - Les tableaux mobiles conservent toutes les colonnes sous forme de cartes. Les tris et la pagination appartiennent à la fonctionnalité. Limiter cette table aux petites collections.
+- Dans une carte de tableau ouvrable, toucher une valeur ouvre la ligne ; les valeurs restent sélectionnables dans les tableaux de lecture seule. `PrismeKeyValue(selectable: false)` permet cette composition sans intercepter le geste d'ouverture.
 
 Les contrôles automatisés ne remplacent pas une session TalkBack/Narrateur ni un essai sur le téléphone cible.
 

@@ -22,7 +22,7 @@ Future<void> main(List<String> args) async {
     if (me.auth_mode != 'development') throw StateError('Unexpected identity');
     final key = 'smoke-${DateTime.now().microsecondsSinceEpoch}';
     final invitation = await connection.api.invite(
-      const Empty(),
+      const Capabilities(capabilities: ["self:heartbeat"]),
       idempotencyKey: key,
     );
     if (args.contains('--invite-only')) {
