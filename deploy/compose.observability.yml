@@ -33,10 +33,10 @@ services:
     image: grafana/alloy:v1.19.2
     user: "473:473"
     group_add: ["${PRISME_DOCKER_SOCKET_GID:-0}"]
-    command: [run, --server.http.listen-addr=0.0.0.0:12345, --storage.path=/var/lib/prisme-alloy, --disable-reporting, /etc/alloy/config.alloy]
+    command: [run, --server.http.listen-addr=0.0.0.0:12345, --storage.path=/var/lib/alloy/data, --disable-reporting, /etc/alloy/config.alloy]
     volumes:
       - ./observability/config.alloy:/etc/alloy/config.alloy:ro
-      - alloy:/var/lib/prisme-alloy
+      - alloy:/var/lib/alloy/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /:/rootfs:ro
       - /var/lib/docker:/var/lib/docker:ro

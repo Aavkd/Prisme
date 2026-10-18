@@ -35,6 +35,19 @@ Une entrée par étape : fait, vérifié, reste. Rien n'est affirmé sans preuve
     en `0600` par `dev-init` au nom de l'utilisateur du runner (montages de fichiers Compose).
     Correctif CI : groupe `10001` en lecture sur `.dev`. **Même piège en production**, voir plus bas.
   - Job `flutter` : `apps/prisme_client/test/onboarding_test.dart` reformaté par `dart format`.
+- **Deuxième passage de la CI** (`d8c213e`) : `backend`, `qualification` et `android` repassent au
+  vert ; deux nouveaux problèmes, sans lien avec les correctifs précédents, sont corrigés :
+  - Alloy (UID 473) s'arrêtait : son volume nommé était monté sur `/var/lib/prisme-alloy`, chemin
+    absent de l'image, donc créé au nom de root (`mkdir /var/lib/prisme-alloy/remotecfg: permission
+    denied`, reproduit localement). Volume et `--storage.path` déplacés sur `/var/lib/alloy/data`,
+    qui appartient à `alloy` dans l'image : Docker recopie ce propriétaire dans un volume neuf.
+    **Concerne aussi la production.** La CI affiche désormais les journaux des conteneurs si
+    l'exercice d'observabilité échoue.
+  - `flutter build windows` du client : l'image `windows-latest` est passée à Visual Studio 2026
+    (MSVC 14.51), où `<experimental/coroutine>`, encore utilisé par le plugin `local_auth_windows`,
+    devient une erreur. `apps/prisme_client/windows/CMakeLists.txt` définit
+    `_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS` (solution temporaire documentée par
+    Microsoft) ; à retirer quand le plugin passera aux coroutines C++20.
 - **Watchdog** (code + tests Go) :
   - `urgent` (défaut `false`) : renseigne `Payload.Urgent` (priorité FCM haute) **et** fait passer
     panne et récupération à travers les horaires silencieux (`Due(now, urgent, 0)`, auparavant
@@ -71,7 +84,8 @@ Résultats réels sur la tour, le 18/10/2026 au soir :
 | `tool/verify.ps1`, partie `apps/prisme_client` | **non exécutable sous Windows ici** : `flutter pub get` exige le « Mode développeur » (liens symboliques des plugins), réglage système non modifié. Rejoué sous Linux (conteneur `ubuntu:24.04` + Flutter 3.38.5 officiel, sans `.dev` monté) : `generate_api --check` OK, formatage 0 changement, analyse sans problème, **44 tests OK** |
 | `flutter build windows` / APK | non faits (pas de Mode développeur, pas de SDK Android sur la tour) ; le job CI `android` compile l'APK |
 | Test `-race` | non fait sous Windows (exige cgo) ; couvert par le job CI `backend` |
-| Kotlin (`PrismeMessagingService`) | non compilé localement ; vérifié par le job CI `android` |
+| Kotlin (`PrismeMessagingService`) | non compilé localement ; job CI `android` **vert** sur `d8c213e` |
+| Pile d'observabilité locale (Docker Desktop, `compose.dev` + `compose.observability`, Alloy corrigé) | tous les conteneurs `healthy` ; `tool/test-observability.py` OK : échantillons frais via Alloy, panne contrôlée → incident, rétablissement → résolution, 7 lignes de logs. Pile arrêtée ensuite (volumes conservés) |
 
 ### Différences dev → prod (à traiter avant ou pendant l'étape 2)
 
@@ -117,7 +131,7 @@ Résultats réels sur la tour, le 18/10/2026 au soir :
 
 ### Reste
 
-- Laisser la CI GitHub confirmer les correctifs sous Linux après le push.
+- Laisser la CI GitHub confirmer les deux derniers correctifs (Alloy, build Windows).
 - Décision sur le point 2 (observabilité HTTP interne) avant d'écrire le compose de production.
 
 ## En attente d'accord

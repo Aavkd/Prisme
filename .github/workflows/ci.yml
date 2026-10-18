@@ -162,6 +162,8 @@ jobs:
       - run: echo "PRISME_DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)" >> "$GITHUB_ENV"
       - run: docker compose -f deploy/compose.dev.yml -f deploy/compose.observability.yml up --build --wait api alloy loki victoriametrics pilot
       - run: python3 tool/test-observability.py
+      - if: failure()
+        run: docker compose -f deploy/compose.dev.yml -f deploy/compose.observability.yml logs --no-color --tail=40 migrate api alloy loki victoriametrics
       - if: always()
         run: docker compose -f deploy/compose.dev.yml -f deploy/compose.observability.yml down
 
