@@ -1,7 +1,7 @@
 # Prompt agent — Mettre Prisme en service sur le VPS (supervision + alertes sécurité)
 
 > Prompt à donner tel quel à un agent de code (Claude Code ou équivalent) ouvert dans
-> `D:\Documents\MANTARA\Prisme`. Plan validé par Alexy le 18/10/2026.
+> `D:\MANTARA\Prisme` (tour). Plan validé par Alexy le 18/10/2026.
 
 ---
 
@@ -44,7 +44,7 @@ Windows** : il est dans les transports puis indisponible par moments. Conséquen
   Relevé du 18/10/2026 : **présents** `git` et Docker ; **absents** Go, Flutter, `gh`, PostgreSQL, Restic. `C:` n'a que
   ≈ 2,5 Go libres, `D:` ≈ 100 Go. Installe les outils manquants en versions **portables sur `D:`** (ex. `D:\tools\`), sans
   rien installer sur `C:` ni modifier le système ; `./tool/test-backups-native.ps1` accepte des binaires PostgreSQL/Restic
-  portables. Pour `gh` : demande à Alexy de s'authentifier (ne manipule pas de jeton). Clone dans `D:\Prisme`.
+  portables. Pour `gh` : demande à Alexy de s'authentifier (ne manipule pas de jeton). Le dépôt est dans `D:\MANTARA\Prisme` (jamais à la racine de `D:`).
 - Les deux fichiers Firebase sont **déjà sur la tour**, dans `D:\PrismeSecrets\` (droits : `speee` et SYSTEM seulement) :
   `google-services.json` et `prisme-*-firebase-adminsdk-*.json` (compte de service complet). Ne les copie
   pas dans le dépôt, ne les affiche pas ; référence-les par chemin dans la configuration. Pour la production (étape 6), crée
