@@ -28,6 +28,8 @@ func run() error {
 		CredentialsFile string                    `json:"credentials_file"`
 		Tokens          []string                  `json:"tokens"`
 		Threshold       int                       `json:"threshold"`
+		Urgent          bool                      `json:"urgent"`
+		Instance        string                    `json:"instance"`
 		Preferences     notifications.Preferences `json:"preferences"`
 	}
 	// Defaults apply only to omitted fields; an explicit enabled:false stays disabled.
@@ -39,7 +41,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	w := notifications.Watchdog{URL: cfg.URL, StateFile: cfg.StateFile, Tokens: cfg.Tokens, Threshold: cfg.Threshold, Sender: sender, Now: time.Now, Preferences: cfg.Preferences, HTTP: &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	w := notifications.Watchdog{URL: cfg.URL, StateFile: cfg.StateFile, Tokens: cfg.Tokens, Threshold: cfg.Threshold, Urgent: cfg.Urgent, Instance: cfg.Instance, Sender: sender, Now: time.Now, Preferences: cfg.Preferences, HTTP: &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	ticker := time.NewTicker(30 * time.Second)

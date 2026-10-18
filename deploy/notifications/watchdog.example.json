@@ -4,5 +4,7 @@
   "credentials_file": "/etc/prisme-watchdog/firebase-service-account.json",
   "tokens": [],
   "threshold": 3,
+  "urgent": false,
+  "instance": "tour",
   "preferences": {"enabled": true, "timezone": "Europe/Paris", "quiet_start": 1320, "quiet_end": 420}
 }

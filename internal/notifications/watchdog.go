@@ -11,8 +11,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"time"
 )
+
+// A short fixed label such as "tour" or "portable"; never a hostname or free text.
+var watchInstance = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,15}$`)
 
 type WatchState struct {
 	IncidentID   string          `json:"incident_id"`
@@ -31,11 +35,15 @@ type Watchdog struct {
 	Sender         Sender
 	Now            func() time.Time
 	Preferences    Preferences
+	// Urgent events cross quiet hours and use high FCM priority.
+	Urgent bool
+	// Instance tells which independent watcher saw the change, in the title only.
+	Instance string
 }
 
 func (w *Watchdog) Tick(ctx context.Context) error {
 	u, err := url.Parse(w.URL)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" || w.Threshold < 2 || w.Threshold > 60 || len(w.Tokens) == 0 || len(w.Tokens) > 20 {
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Fragment != "" || w.Threshold < 2 || w.Threshold > 60 || len(w.Tokens) == 0 || len(w.Tokens) > 20 || w.Instance != "" && !watchInstance.MatchString(w.Instance) {
 		return errors.New("invalid watchdog configuration")
 	}
 	state := WatchState{Delivered: map[string]bool{}}
@@ -107,8 +115,12 @@ func (w *Watchdog) Tick(ctx context.Context) error {
 	}
 	event := state.PendingEvent
 	confirmed := event == "unreachable" && state.Failures >= w.Threshold || event == "reachable" && state.Successes >= w.Threshold
-	if confirmed && prefs.Enabled && !prefs.Due(now, false, 0).After(now) {
-		p := Payload{IncidentID: state.IncidentID, Severity: "warning", Title: "Prisme", State: event, Route: "/watchdog", Urgent: false}
+	if confirmed && prefs.Enabled && !prefs.Due(now, w.Urgent, 0).After(now) {
+		title := "Prisme"
+		if w.Instance != "" {
+			title += " · " + w.Instance
+		}
+		p := Payload{IncidentID: state.IncidentID, Severity: "warning", Title: title, State: event, Route: "/watchdog", Urgent: w.Urgent}
 		p.EventID = watchTokenKey(state.IncidentID + ":" + event)
 		var deliveryErr error
 		for _, token := range w.Tokens {

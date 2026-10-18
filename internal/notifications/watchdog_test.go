@@ -204,3 +204,51 @@ func TestWatchdogUpgradesLegacyPartialDelivery(t *testing.T) {
 		}
 	}
 }
+
+func TestWatchdogUrgentCrossesQuietHoursWithInstanceTitle(t *testing.T) {
+	quiet := Preferences{Enabled: true, Timezone: "UTC", QuietStart: 11 * 60, QuietEnd: 13 * 60}
+	s := &recipientSender{}
+	w, _, tick := watchFixture(t, s)
+	w.Preferences = quiet
+	tick(false)
+	tick(false)
+	if len(s.attempts) != 0 {
+		t.Fatal("ordinary watchdog event crossed quiet hours")
+	}
+	s = &recipientSender{}
+	w, _, tick = watchFixture(t, s)
+	w.Preferences, w.Urgent, w.Instance = quiet, true, "tour"
+	tick(false)
+	tick(false)
+	if len(s.delivered) != 2 {
+		t.Fatalf("urgent watchdog event held by quiet hours: %+v", s.attempts)
+	}
+	for _, d := range s.delivered {
+		if !d.payload.Urgent || d.payload.Title != "Prisme · tour" || d.payload.Severity != "warning" || d.payload.Route != "/watchdog" {
+			t.Fatalf("unexpected urgent payload: %+v", d.payload)
+		}
+	}
+}
+
+func TestWatchdogDefaultsToFixedTitleAndOrdinaryPriority(t *testing.T) {
+	s := &recipientSender{}
+	_, _, tick := watchFixture(t, s)
+	tick(false)
+	tick(false)
+	if len(s.delivered) != 2 || s.delivered[0].payload.Title != "Prisme" || s.delivered[0].payload.Urgent {
+		t.Fatalf("unexpected default payload: %+v", s.delivered)
+	}
+}
+
+func TestWatchdogRejectsUnsafeInstanceLabel(t *testing.T) {
+	for _, label := range []string{"Tour", "tour.local", "a b", "-tour", "prisme\nfake", "tour · portable", "abcdefghijklmnopq"} {
+		s := &recipientSender{}
+		w, _, tick := watchFixture(t, s)
+		w.Instance = label
+		tick(true)
+		tick(true)
+		if len(s.attempts) != 0 {
+			t.Fatalf("unsafe instance label %q accepted", label)
+		}
+	}
+}

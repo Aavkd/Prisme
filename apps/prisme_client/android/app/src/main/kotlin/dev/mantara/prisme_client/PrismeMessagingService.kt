@@ -27,6 +27,8 @@ class PrismeMessagingService : FirebaseMessagingService() {
         if (severity !in listOf("information", "warning", "degraded", "critical") || state !in listOf("attention", "resolved", "unreachable", "reachable")) return
         val manager = getSystemService(NotificationManager::class.java)
         if (!manager.areNotificationsEnabled()) return
+        // Only the watchdog may add its short instance label; incident titles stay fixed.
+        val title = data["title"]?.takeIf { route == "/watchdog" && it.matches(Regex("Prisme( · [a-z0-9][a-z0-9-]{0,15})?")) } ?: "Prisme"
         val urgent = data["urgent"] == "true" && severity == "critical" && route != "/watchdog"
         val channel = if (urgent) "prisme_urgent" else "prisme_normal"
         manager.createNotificationChannel(NotificationChannel(channel, if (urgent) "Prisme · Urgences" else "Prisme · Notifications", if (urgent) NotificationManager.IMPORTANCE_HIGH else NotificationManager.IMPORTANCE_DEFAULT))
@@ -42,7 +44,7 @@ class PrismeMessagingService : FirebaseMessagingService() {
             else -> if (fr) "Incident à consulter dans Prisme" else "Incident needs attention in Prisme"
         }
         val notification = Notification.Builder(this, channel).setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Prisme").setContentText(text).setContentIntent(pending).setAutoCancel(true)
+            .setContentTitle(title).setContentText(text).setContentIntent(pending).setAutoCancel(true)
             .setVisibility(Notification.VISIBILITY_PRIVATE).setGroup("prisme_incidents")
             .setOnlyAlertOnce(false).setTimeoutAfter(300000).build()
         manager.notify(id, 0, notification)

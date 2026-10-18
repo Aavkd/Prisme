@@ -103,6 +103,22 @@ Un destinataire peut ainsi recevoir la récupération même si l'alerte de panne
 lui est jamais parvenue. `enabled: false` reste respecté sans fuseau explicite ;
 le fuseau par défaut est UTC.
 
+Deux champs facultatifs (phase 10) :
+
+- `urgent` (défaut `false`) : panne et récupération traversent les horaires
+  silencieux du watchdog et partent en priorité FCM haute. La sévérité reste
+  `warning` et Android garde le canal ordinaire pour `/watchdog` : la perte du
+  control plane ne prouve toujours pas la panne d'un site.
+- `instance` (défaut vide) : libellé court du veilleur (`tour`, `portable`),
+  `^[a-z0-9][a-z0-9-]{0,15}$`, ajouté au titre (`Prisme · tour`). Toute autre
+  valeur rend la configuration invalide. Android n'affiche ce titre que pour la
+  route `/watchdog` et après la même validation ; les titres d'incident restent
+  fixes. Ce n'est pas un hostname : ne pas y mettre de nom de machine.
+
+Plusieurs veilleurs peuvent surveiller la même URL, chacun avec son propre fichier
+d'état : l'ID d'incident est tiré au hasard par instance, donc une même panne vue
+par deux veilleurs produit deux notifications distinctes.
+
 ## Vérifications et preuves
 
 ```powershell
