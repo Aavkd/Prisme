@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -59,8 +60,14 @@ func TestPhaseTenOnboardingPreviewAndFirstDeployment(t *testing.T) {
 	if len(projects) != 1 || projects[0].(map[string]any)["state"] != "succeeded" {
 		t.Fatal("verified first deployment not shown")
 	}
-	if len(d.steps) != 8 {
-		t.Fatal("deployment checks bypassed")
+	// Observation runs through Driver.Verify and promotion stays in the engine, so
+	// the driver sees every other step of deployment.Steps exactly once, in order.
+	if want := []string{"preconditions", "configuration", "pull", "start", "health", "traffic"}; !slices.Equal(d.steps, want) {
+		t.Fatalf("deployment checks bypassed: %v", d.steps)
+	}
+	var observed int
+	if err := f.db.QueryRow(`SELECT count(*) FROM deployment_events WHERE job_id=$1 AND step='observation' AND state='succeeded'`, id).Scan(&observed); err != nil || observed != 1 {
+		t.Fatal("post-deployment observation bypassed", err)
 	}
 }
 

@@ -41,7 +41,10 @@ func TestCollectorExcludesSecretsAndReportsDockerFailure(t *testing.T) {
 	dir := t.TempDir()
 	// Test the real Python program with a controlled subprocess adapter. Fixtures
 	// include secrets outside the selected fields and Docker details absent on one container.
-	shim := `import subprocess, json
+	// platform.platform() may itself run uname -p (Linux) or ver (Windows); its
+	// cached result is primed before patching so only Docker reaches the adapter.
+	prime := "import platform\nplatform.platform()\n"
+	shim := prime + `import subprocess, json
 class FakeProcess:
     def __init__(self,args,**kwargs):
         import io
@@ -68,7 +71,7 @@ subprocess.Popen=FakeProcess
 	if !strings.Contains(string(out), "sounding-lines") || strings.Contains(string(out), "PASSWORD") || strings.Contains(string(out), "container_details_partial") {
 		t.Fatal("unexpected collector output")
 	}
-	failed := "import subprocess\ndef failed(*a,**k): raise FileNotFoundError()\nsubprocess.Popen=failed\n"
+	failed := prime + "import subprocess\ndef failed(*a,**k): raise FileNotFoundError()\nsubprocess.Popen=failed\n"
 	os.WriteFile(path, []byte(failed+collector), 0600)
 	out, err = exec.Command(python, path).Output()
 	if err != nil {
