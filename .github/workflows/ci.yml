@@ -159,7 +159,14 @@ jobs:
       # Compose bind-mounts file secrets with host permissions and the API runs as
       # 10001: grant that group read access, the runner keeps ownership.
       - run: sudo chgrp -R 10001 .dev && chmod -R g+rX .dev
+      # Match the VPS (Docker 29, containerd image store): cAdvisor then reads
+      # containers through containerd, not the root-only overlay2 layer database.
+      - run: |
+          sudo sh -c 'f=/etc/docker/daemon.json; [ -s "$f" ] || echo "{}" > "$f"; jq ".features[\"containerd-snapshotter\"]=true" "$f" > /tmp/daemon.json && mv /tmp/daemon.json "$f"'
+          sudo systemctl restart docker
+          docker info --format 'storage={{.Driver}}'
       - run: echo "PRISME_DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)" >> "$GITHUB_ENV"
+      - run: echo "PRISME_CONTAINERD_SOCKET_GID=$(stat -c '%g' /run/containerd/containerd.sock)" >> "$GITHUB_ENV"
       - run: docker compose -f deploy/compose.dev.yml -f deploy/compose.observability.yml up --build --wait api alloy loki victoriametrics pilot
       - run: python3 tool/test-observability.py
       - if: failure()

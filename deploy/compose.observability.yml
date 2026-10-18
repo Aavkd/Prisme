@@ -32,7 +32,9 @@ services:
   alloy:
     image: grafana/alloy:v1.19.2
     user: "473:473"
-    group_add: ["${PRISME_DOCKER_SOCKET_GID:-0}"]
+    # Docker socket for discovery and logs; containerd socket for cAdvisor
+    # (Docker Desktop: group 0 covers both, 473 is Alloy's own group).
+    group_add: ["${PRISME_DOCKER_SOCKET_GID:-0}", "${PRISME_CONTAINERD_SOCKET_GID:-473}"]
     command: [run, --server.http.listen-addr=0.0.0.0:12345, --storage.path=/var/lib/alloy/data, --disable-reporting, /etc/alloy/config.alloy]
     volumes:
       - ./observability/config.alloy:/etc/alloy/config.alloy:ro
