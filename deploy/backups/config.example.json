@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "coordination_root": "/var/lib/prisme-coordination",
+  "work_root": "/var/lib/prisme-backup/work",
+  "repositories": [
+    {
+      "id": "local",
+      "location_file": "/etc/prisme/backup/repository-location",
+      "password_file": "/etc/prisme/backup/repository-password",
+      "credentials_file": "",
+      "storage_host": "vps",
+      "offsite": false
+    }
+  ],
+  "policies": [
+    {
+      "id": "sounding-lines-db-v1",
+      "project": "sounding-lines",
+      "environment": "production",
+      "server": "vps",
+      "repository": "local",
+      "kind": "postgres",
+      "path": "",
+      "service_file": "/etc/prisme/backup/pg-service.conf",
+      "service": "sounding-lines-source",
+      "consistency": "logical",
+      "enabled": false,
+      "interval_seconds": 86400,
+      "restore_test_seconds": 604800,
+      "test_target": "sounding-lines-test",
+      "timeout_seconds": 3600,
+      "upload_kib": 4096,
+      "download_kib": 8192,
+      "retention": {"keep_last": 2, "keep_daily": 7, "keep_weekly": 4}
+    }
+  ],
+  "targets": [
+    {
+      "id": "sounding-lines-test",
+      "policy": "sounding-lines-db-v1",
+      "server": "restore-lab",
+      "kind": "postgres",
+      "test_only": true,
+      "root": "",
+      "service_file": "/etc/prisme/backup/pg-service.conf",
+      "service": "sounding-lines-test",
+      "validation_file": "/etc/prisme/backup/validate-pilot.sql"
+    }
+  ]
+}

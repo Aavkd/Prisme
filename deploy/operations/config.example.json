@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "state_root": "/var/lib/prisme-operations",
+  "master_key_file": "/run/secrets/prisme-vault-master",
+  "recovery_keys": {},
+  "targets": [
+    {
+      "id": "local-admin",
+      "name": "Explicit SSH target",
+      "environment": "development",
+      "address": "127.0.0.1:22",
+      "user": "prisme-operator",
+      "key_file": "/run/secrets/prisme-ssh-key",
+      "host_key": "SHA256:REPLACE_WITH_VERIFIED_HOST_FINGERPRINT",
+      "terminal": false,
+      "files": false,
+      "diagnostics": false,
+      "containers": [],
+      "roots": ["/srv/prisme-managed"],
+      "guard_path": "/usr/local/bin/prisme-host-guard",
+      "coordination_root": "/var/lib/prisme-coordination",
+      "lock_target": "local"
+    }
+  ]
+}

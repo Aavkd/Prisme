@@ -1,9 +1,17 @@
-name: Foundation
+name: Prisme validation
 on: [push, pull_request]
 permissions:
   contents: read
 
 jobs:
+  qualification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f deploy/qualification/Dockerfile.test -t prisme-qualification-test:ci .
+      - name: Isolated control-plane restore, network failure and targeted load
+        run: docker run --rm --network none --memory 768m --pids-limit 256 prisme-qualification-test:ci
+
   backend:
     runs-on: ubuntu-latest
     services:
@@ -29,7 +37,130 @@ jobs:
       - run: go test -race -count=1 ./...
       - run: go build ./...
       - run: docker compose -f deploy/compose.dev.yml config --quiet
+      - run: docker compose -f deploy/compose.dev.yml -f deploy/compose.observability.yml config --quiet
+      - run: docker compose -f deploy/compose.dev.yml -f deploy/compose.github.yml config --quiet
+      - run: docker compose -f deploy/compose.dev.yml -f deploy/compose.notifications.yml config --quiet
+      - run: docker run --rm -v "$PWD/deploy/observability/config.alloy:/etc/alloy/config.alloy:ro" grafana/alloy:v1.19.2 validate /etc/alloy/config.alloy
       - run: docker build --target api -f deploy/Dockerfile -t prisme-ci-api .
+
+  edge:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: prisme
+          POSTGRES_DB: prisme_test
+          POSTGRES_PASSWORD: isolated-ci-fixture-only
+        ports: ["55432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U prisme -d prisme_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      PRISME_TEST_DATABASE_URL: postgres://prisme:isolated-ci-fixture-only@127.0.0.1:55432/prisme_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: mkdir -p .dev && CGO_ENABLED=0 go test -c -o .dev/edge-tests ./internal/api
+      - run: docker build -f deploy/edge/Dockerfile.test -t prisme-edge-test:ci .
+      - name: Change and restore a route without breaking neighboring domains
+        run: >-
+          docker run --rm --network host
+          -e PRISME_TEST_DATABASE_URL -e PRISME_TEST_CADDY_BINARY=/usr/bin/caddy
+          --mount "type=bind,source=$PWD,target=/workspace,readonly"
+          -w /workspace/internal/api prisme-edge-test:ci -test.v -test.run=TestPhaseEightLiveCaddySharedDomains -test.timeout=3m
+
+  operations:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f deploy/operations/Dockerfile.test -t prisme-operations-test:ci .
+      - run: docker run --rm prisme-operations-test:ci
+
+  backups:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f deploy/backups/Dockerfile.test -t prisme-backup-test:ci .
+      - run: docker run --rm --network none prisme-backup-test:ci
+
+  deployments:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: prisme
+          POSTGRES_DB: prisme_test
+          POSTGRES_PASSWORD: isolated-ci-fixture-only
+        ports: ["55432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U prisme -d prisme_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: mkdir -p .dev && CGO_ENABLED=0 go test -c -o .dev/deployment-tests ./internal/api
+      - run: docker build -f deploy/deployment/Dockerfile.test -t prisme-deployment-test:local .
+      - name: Deploy and restore through real Compose and Caddy
+        run: >-
+          docker run --rm --network host
+          -e PRISME_TEST_COMPOSE=1
+          -e PRISME_TEST_DATABASE_URL=postgres://prisme:isolated-ci-fixture-only@127.0.0.1:55432/prisme_test?sslmode=disable
+          -v "$PWD:/workspace:ro"
+          -v /var/run/docker.sock:/var/run/docker.sock
+          -v /var/lib/docker:/var/lib/docker:ro
+          -w /workspace/internal/api prisme-deployment-test:local
+          /workspace/.dev/deployment-tests -test.v -test.run=TestPhaseFourLiveCompose -test.timeout=5m
+
+  automation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: prisme
+          POSTGRES_DB: prisme_test
+          POSTGRES_PASSWORD: isolated-ci-fixture-only
+        ports: ["55432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U prisme -d prisme_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      PRISME_TEST_DATABASE_URL: postgres://prisme:isolated-ci-fixture-only@127.0.0.1:55432/prisme_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: mkdir -p .dev && CGO_ENABLED=0 go test -c -o .dev/automation-tests ./internal/api
+      - run: docker pull nginx:alpine && docker pull caddy:2-alpine
+      - run: docker build -f deploy/deployment/Dockerfile.test -t prisme-deployment-test:local .
+      - name: Controlled failure, bounded restart and healthy rollback
+        run: >-
+          docker run --rm --network host -e PRISME_TEST_DATABASE_URL -e PRISME_TEST_COMPOSE=1
+          --mount "type=bind,source=$PWD,target=/workspace,readonly"
+          -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker:ro
+          -w /workspace/internal/api prisme-deployment-test:local
+          /workspace/.dev/automation-tests -test.v -test.run=TestPhaseNineLiveComposeRemediation -test.timeout=5m
+
+  observability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go run ./cmd/dev-init
+      - run: echo "PRISME_DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)" >> "$GITHUB_ENV"
+      - run: docker compose -f deploy/compose.dev.yml -f deploy/compose.observability.yml up --build --wait api alloy loki victoriametrics pilot
+      - run: python3 tool/test-observability.py
+      - if: always()
+        run: docker compose -f deploy/compose.dev.yml -f deploy/compose.observability.yml down
 
   contracts:
     runs-on: ubuntu-latest
@@ -53,3 +184,19 @@ jobs:
           "$env:RUNNER_TEMP/flutter/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
       - run: ./tool/verify.ps1 -BuildWindows
         shell: pwsh
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install the validated Flutter SDK
+        run: |
+          git clone --depth 1 --branch 3.38.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Compile the Android client without embedded credentials
+        working-directory: apps/prisme_client
+        run: flutter build apk --debug --dart-define=PRISME_DEVELOPMENT=true

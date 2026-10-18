@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "id": "sounding-lines-legacy",
+  "project": "sounding-lines",
+  "environment": "production",
+  "server": "ovh-production",
+  "repository_id": "",
+  "repository": "Aavkd/Sounding-Lines",
+  "branch": "main",
+  "enabled": false,
+  "legacy": true,
+  "strategy": "recreate",
+  "migration": "none",
+  "backup_required": true,
+  "observation_seconds": 300,
+  "timeout_seconds": 900,
+  "minimum_free_bytes": 2147483648,
+  "network": "",
+  "services": [
+    {"name":"frontend","port":80,"blue_port":18081,"green_port":0,"health_path":"/","docker_health":false,"env_file":"","stateless":true},
+    {"name":"backend","port":8000,"blue_port":18082,"green_port":0,"health_path":"/api/health","docker_health":true,"env_file":"backend.env","stateless":true},
+    {"name":"worker","port":0,"blue_port":0,"green_port":0,"health_path":"","docker_health":true,"env_file":"worker.env","stateless":false}
+  ],
+  "caddy_url": "",
+  "caddy_id": "",
+  "ingress_service": "",
+  "public_health_url": ""
+}

@@ -1,0 +1,19 @@
+FROM golang:1.26.8-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY internal ./internal
+COPY cmd ./cmd
+RUN CGO_ENABLED=0 go build -o /out/prisme-host-guard ./cmd/host-guard && \
+    CGO_ENABLED=0 go test -c -o /out/operations.test ./internal/operations
+
+FROM alpine:3.22
+RUN apk add --no-cache openssh openssh-sftp-server && \
+    adduser -D -h /fixture/project prisme && passwd -d prisme && \
+    mkdir -p /fixture/project /fixture/coordination /run/sshd && \
+    chown -R prisme:prisme /fixture
+COPY --from=build /out/prisme-host-guard /usr/local/bin/prisme-host-guard
+COPY --from=build /out/operations.test /operations.test
+COPY deploy/operations/test-entrypoint.sh /test-entrypoint.sh
+ENV PRISME_TEST_SSH=1
+ENTRYPOINT ["sh", "/test-entrypoint.sh"]

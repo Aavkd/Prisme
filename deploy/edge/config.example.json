@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "coordination_root": "/var/lib/prisme-coordination",
+  "zones": [
+    {
+      "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "account": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "read_token_file": "/run/secrets/cloudflare-read",
+      "write_token_file": "/run/secrets/cloudflare-dns-write"
+    }
+  ],
+  "targets": [
+    {
+      "id": "pilot-route",
+      "kind": "caddy",
+      "server": "edge-host",
+      "environment": "production",
+      "write_enabled": false,
+      "domain": "pilot.example.com",
+      "caddy": {
+        "binary": "/usr/bin/caddy",
+        "admin_url": "http://127.0.0.1:2019",
+        "source_file": "/etc/caddy/Caddyfile",
+        "managed_file": "/etc/caddy/prisme/pilot.caddy",
+        "http_only": false,
+        "upstreams": ["pilot-blue:8080", "pilot-green:8080"],
+        "snippets": []
+      },
+      "checks": [
+        {"url": "https://pilot.example.com/health", "host": "", "status": 200, "contains": "ok"},
+        {"url": "https://other.example.com/", "host": "", "status": 200, "contains": ""}
+      ]
+    },
+    {
+      "id": "pilot-dns",
+      "kind": "dns",
+      "server": "cloudflare-zone",
+      "environment": "production",
+      "write_enabled": false,
+      "domain": "pilot.example.com",
+      "zone": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "record": "cccccccccccccccccccccccccccccccc",
+      "checks": [
+        {"url": "https://pilot.example.com/health", "host": "", "status": 200, "contains": "ok"}
+      ]
+    }
+  ]
+}

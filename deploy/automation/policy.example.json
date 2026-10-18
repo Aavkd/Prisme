@@ -1,0 +1,21 @@
+{
+  "id": "pilot-repair",
+  "version": 1,
+  "target": "pilot-web",
+  "mode": "supervised",
+  "failures": 3,
+  "window_seconds": 60,
+  "freshness_seconds": 30,
+  "actions": ["restart"],
+  "max_attempts": 1,
+  "backoff_seconds": 10,
+  "observation_seconds": 30,
+  "timeout_seconds": 300,
+  "cooldown_seconds": 600,
+  "maintenance_until": null,
+  "dependencies": [],
+  "exclusions": [],
+  "healthy_release": "",
+  "migration": "none",
+  "notify": true
+}

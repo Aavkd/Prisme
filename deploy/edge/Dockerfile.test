@@ -1,0 +1,3 @@
+FROM caddy:2.11.4-alpine
+# The test executable is cross-compiled locally/CI. No Docker socket is mounted.
+ENTRYPOINT ["/workspace/.dev/edge-tests"]

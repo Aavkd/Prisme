@@ -16,14 +16,21 @@ String typeOf(Map<String, dynamic> schema) {
     'string' => 'String',
     'boolean' => 'bool',
     'integer' => 'int',
+    'number' => 'num',
     'array' => 'List<${typeOf(schema['items'] as Map<String, dynamic>)}>',
-    'object' when schema['additionalProperties']?['type'] == 'string' =>
+    'object'
+        when schema['additionalProperties'] is Map &&
+            schema['additionalProperties']['type'] == 'string' =>
       'Map<String, String>',
+    'object' => 'Map<String, dynamic>',
     _ => throw UnsupportedError('Unsupported schema: $schema'),
   };
 }
 
 String decode(Map<String, dynamic> schema, String value) {
+  if (schema['type'] is List && (schema['type'] as List).contains('null')) {
+    return '$value == null ? null : ${decode({...schema, 'type': (schema['type'] as List).firstWhere((v) => v != 'null')}, value)}';
+  }
   if (schema.containsKey(r'$ref')) {
     return '${refName(schema)}.fromJson($value as Map<String, dynamic>)';
   }
@@ -31,7 +38,7 @@ String decode(Map<String, dynamic> schema, String value) {
     return '($value as List).map((v) => ${decode(schema['items'] as Map<String, dynamic>, 'v')}).toList()';
   }
   if (schema['type'] == 'object') {
-    return 'Map<String, String>.from($value as Map)';
+    return '${typeOf(schema)}.from($value as Map)';
   }
   return '$value as ${typeOf(schema)}';
 }
@@ -62,16 +69,37 @@ typedef ApiTransport = Future<Map<String, dynamic>> Function(
   final schemas = spec['components']['schemas'] as Map<String, dynamic>;
   for (final entry in schemas.entries) {
     final schema = entry.value as Map<String, dynamic>;
-    final props = schema['properties'] as Map<String, dynamic>;
-    if (schema['type'] != 'object' ||
-        (schema['required'] as List).length != props.length) {
-      throw UnsupportedError('DTOs must declare all properties required');
+    if (schema['x-preserve-json'] == true) {
+      out.writeln('class ${entry.key} {');
+      out.writeln('  const ${entry.key}(this.data);');
+      out.writeln('  final Map<String, dynamic> data;');
+      out.writeln(
+        '  factory ${entry.key}.fromJson(Map<String, dynamic> json) => ${entry.key}(Map<String, dynamic>.from(json));',
+      );
+      out.writeln('  Map<String, dynamic> toJson() => data;');
+      out.writeln('}');
+      continue;
+    }
+    final originalProps = schema['properties'] as Map<String, dynamic>;
+    final required = schema['required'] as List? ?? [];
+    if (schema['type'] != 'object') {
+      throw UnsupportedError('DTOs must be objects');
+    }
+    final props = <String, dynamic>{};
+    for (final property in originalProps.entries) {
+      final field = Map<String, dynamic>.from(property.value as Map);
+      if (!required.contains(property.key)) {
+        if (field.containsKey(r'$ref') || field['type'] is! String)
+          throw UnsupportedError('Optional reference/union unsupported');
+        field['type'] = [field['type'], 'null'];
+      }
+      props[property.key] = field;
     }
     out.writeln('class ${entry.key} {');
     out.writeln(
       props.isEmpty
           ? '  const ${entry.key}();'
-          : '  const ${entry.key}({${props.keys.map((k) => 'required this.$k').join(', ')}});',
+          : '  const ${entry.key}({${props.keys.map((k) => '${required.contains(k) ? 'required ' : ''}this.$k').join(', ')}});',
     );
     for (final p in props.entries) {
       out.writeln(
@@ -89,7 +117,7 @@ typedef ApiTransport = Future<Map<String, dynamic>> Function(
     out.writeln('  );\n  Map<String, dynamic> toJson() => {');
     for (final p in props.entries) {
       out.writeln(
-        "    '${p.key}': ${encode(p.value as Map<String, dynamic>, p.key)},",
+        "    ${required.contains(p.key) ? '' : 'if (${p.key} != null) '}'${p.key}': ${encode(p.value as Map<String, dynamic>, p.key)},",
       );
     }
     out.writeln('  };\n}\n');
@@ -100,6 +128,8 @@ typedef ApiTransport = Future<Map<String, dynamic>> Function(
   for (final path in (spec['paths'] as Map<String, dynamic>).entries) {
     for (final method in (path.value as Map<String, dynamic>).entries) {
       final op = method.value;
+      if (op['x-browser-only'] == true || op['x-native-stream'] == true)
+        continue;
       final input = op['requestBody']?['content']['application/json']['schema'];
       final response = (op['responses'] as Map).entries
           .firstWhere((e) => e.key.toString().startsWith('2'))
@@ -110,17 +140,32 @@ typedef ApiTransport = Future<Map<String, dynamic>> Function(
       final named = <String>[];
       var expression = "'${path.key}'";
       var callArgs = input == null ? '' : ', body: request.toJson()';
+      final queryParts = <String>[];
       for (final p in parameters) {
-        if (p['name'] == 'cursor' && p['in'] == 'query') {
-          named.add("String cursor = ''");
-          expression =
-              "'${path.key}?cursor=\${Uri.encodeQueryComponent(cursor)}'";
+        if (p['in'] == 'query' && p['schema']['type'] == 'string') {
+          final name = p['name'];
+          named.add(
+            p['required'] == true
+                ? 'required String $name'
+                : "String $name = ''",
+          );
+          queryParts.add('$name=\${Uri.encodeQueryComponent($name)}');
         } else if (p['name'] == 'Idempotency-Key' && p['in'] == 'header') {
           named.add('required String idempotencyKey');
           callArgs += ', idempotencyKey: idempotencyKey';
+        } else if (p['in'] == 'path') {
+          named.add('required String ${p['name']}');
+          expression = expression.replaceAll(
+            '{${p['name']}}',
+            '\${Uri.encodeComponent(${p['name']})}',
+          );
         } else {
           throw UnsupportedError('Unsupported parameter $p');
         }
+      }
+      if (queryParts.isNotEmpty) {
+        expression =
+            "${expression.substring(0, expression.length - 1)}?${queryParts.join('&')}'";
       }
       if (named.isNotEmpty) args.add('{${named.join(', ')}}');
       out.writeln(

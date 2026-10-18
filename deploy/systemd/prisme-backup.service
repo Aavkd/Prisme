@@ -1,0 +1,32 @@
+[Unit]
+Description=Prisme Restic backup worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prisme-ops
+Group=prisme-ops
+EnvironmentFile=/etc/prisme/backup/worker.env
+ExecStart=/usr/local/bin/prisme-backup -config /etc/prisme/backup/config.json
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=40
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/prisme-backup /var/lib/prisme-coordination
+# Add the exact mounted repository and file-restore roots to ReadWritePaths.
+# For cgroup v2 I/O rate limits, add IOReadBandwidthMax=/device rate and
+# IOWriteBandwidthMax=/device rate for the actual source and destination devices.
+CPUQuota=100%
+CPUWeight=20
+IOWeight=20
+MemoryMax=1G
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

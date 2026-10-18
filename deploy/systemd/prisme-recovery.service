@@ -1,0 +1,27 @@
+[Unit]
+Description=Prisme independent recovery gateway
+After=network-online.target ssh.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prisme-operator
+Group=prisme-operator
+EnvironmentFile=/etc/prisme-recovery/listener.env
+ExecStart=/usr/local/bin/prisme-recovery -config /etc/prisme-recovery/operations.json -identity-root /var/lib/prisme-recovery -origin ${PRISME_RECOVERY_ORIGIN} -listen 127.0.0.1:9443 -cert /etc/prisme-recovery/tls.pem -key /etc/prisme-recovery/tls-key.pem
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/prisme-recovery /var/lib/prisme-coordination
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryMax=256M
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target

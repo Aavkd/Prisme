@@ -1,0 +1,77 @@
+# Explicit local overlay: docker compose -f deploy/compose.dev.yml -f deploy/compose.observability.yml up -d --build
+# HTTP is confined to the existing internal Docker network. Remote collectors
+# require a separately provisioned HTTPS/mTLS ingress; these ports are not published.
+services:
+  api:
+    environment:
+      PRISME_OBSERVABILITY_CONFIG: /etc/prisme/observability.json
+      PRISME_METRICS_URL: http://victoriametrics:8428
+      PRISME_LOGS_URL: http://loki:3100
+    volumes:
+      - ./observability/config.json:/etc/prisme/observability.json:ro
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.151.0
+    command: [-storageDataPath=/storage, -retentionPeriod=30d, -storage.minFreeDiskSpaceBytes=1073741824, -search.maxUniqueTimeseries=1000, -search.maxQueryDuration=3s, -memory.allowedBytes=192MiB]
+    volumes: [metrics:/storage]
+    networks: [control]
+    mem_limit: 256m
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  loki:
+    image: grafana/loki:3.7.7
+    command: [-config.file=/etc/loki/local.yml]
+    volumes:
+      - ./observability/loki.yml:/etc/loki/local.yml:ro
+      - logs:/loki
+    networks: [control]
+    mem_limit: 384m
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  alloy:
+    image: grafana/alloy:v1.19.2
+    user: "473:473"
+    group_add: ["${PRISME_DOCKER_SOCKET_GID:-0}"]
+    command: [run, --server.http.listen-addr=0.0.0.0:12345, --storage.path=/var/lib/prisme-alloy, --disable-reporting, /etc/alloy/config.alloy]
+    volumes:
+      - ./observability/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy:/var/lib/prisme-alloy
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /sys:/sys:ro
+      - /:/host/root:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    networks: [control]
+    mem_limit: 512m
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on: [victoriametrics, loki]
+  pilot:
+    image: prisme-local-pilot:phase2
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      target: pilot
+    labels:
+      prisme.observation: "true"
+      prisme.project: phase2-pilot
+      prisme.environment: development
+      prisme.service: web
+    networks: [control]
+    read_only: true
+    mem_limit: 32m
+    pids_limit: 32
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes: [pilot_control:/control]
+    logging:
+      options: {max-size: 2m, max-file: "2"}
+volumes:
+  metrics:
+  logs:
+  alloy:
+  pilot_control:

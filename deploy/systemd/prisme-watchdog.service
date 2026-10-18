@@ -1,0 +1,19 @@
+[Unit]
+Description=Prisme independent control-plane watchdog
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=prisme-watchdog
+ExecStart=/usr/local/bin/prisme-watchdog -config /etc/prisme-watchdog/config.json
+Restart=on-failure
+RestartSec=10
+StateDirectory=prisme-watchdog
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

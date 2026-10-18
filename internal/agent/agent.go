@@ -1,4 +1,4 @@
-// Package agent implements outgoing enrollment and self-heartbeat only.
+// Package agent implements outgoing enrollment, renewal and bounded observations.
 package agent
 
 import (
@@ -19,13 +19,18 @@ import (
 	"path/filepath"
 	"time"
 
+	"prisme.local/platform/internal/inventory"
 	"prisme.local/platform/internal/pki"
 )
 
 type Config struct{ URL, CAFile, TokenFile, StateDir, Name string }
 type Client struct {
-	HTTP    *http.Client
-	URL, ID string
+	HTTP         *http.Client
+	URL, ID      string
+	Capabilities []string
+	stateDir     string
+	keyPEM       []byte
+	leaf         *x509.Certificate
 }
 
 func post(ctx context.Context, c *http.Client, base, path string, body, out any) error {
@@ -134,7 +139,7 @@ func Connect(ctx context.Context, cfg Config) (*Client, error) {
 	tlsConfig.Certificates = []tls.Certificate{identity}
 	client.CloseIdleConnections()
 	client.Transport = &http.Transport{TLSClientConfig: tlsConfig}
-	return &Client{HTTP: client, URL: base, ID: leaf.Subject.CommonName}, nil
+	return &Client{HTTP: client, URL: base, ID: leaf.Subject.CommonName, stateDir: cfg.StateDir, keyPEM: keyPEM, leaf: leaf}, nil
 }
 func (c *Client) Heartbeat(ctx context.Context) error {
 	var result struct {
@@ -144,8 +149,79 @@ func (c *Client) Heartbeat(ctx context.Context) error {
 	if err := post(ctx, c.HTTP, c.URL, "/v1/agent/heartbeat", map[string]string{"protocol_version": "1"}, &result); err != nil {
 		return err
 	}
-	if result.ID != c.ID || len(result.Capabilities) != 1 || result.Capabilities[0] != "self:heartbeat" {
+	if result.ID != c.ID {
 		return errors.New("unexpected agent capability contract")
 	}
+	c.Capabilities = result.Capabilities
+	if time.Until(c.leaf.NotAfter) < 8*time.Hour {
+		return c.Renew(ctx)
+	}
 	return nil
+}
+
+// Renew retains the private key and atomically swaps the public certificate. The API
+// accepts the preceding serial for ten minutes to recover a lost response or restart.
+func (c *Client) Renew(ctx context.Context) error {
+	key, err := pki.ParseKey(c.keyPEM)
+	if err != nil {
+		return err
+	}
+	der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+	if err != nil {
+		return err
+	}
+	csr := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der}))
+	var result struct {
+		Certificate string `json:"certificate_pem"`
+	}
+	if err = post(ctx, c.HTTP, c.URL, "/v1/agent/renew", map[string]string{"csr_pem": csr}, &result); err != nil {
+		return err
+	}
+	identity, err := tls.X509KeyPair([]byte(result.Certificate), c.keyPEM)
+	if err != nil {
+		return errors.New("invalid renewal")
+	}
+	leaf, err := x509.ParseCertificate(identity.Certificate[0])
+	if err != nil || leaf.Subject.CommonName != c.ID {
+		return errors.New("invalid renewal identity")
+	}
+	old := c.HTTP.Transport.(*http.Transport)
+	cfg := old.TLSClientConfig.Clone()
+	if _, err = leaf.Verify(x509.VerifyOptions{Roots: cfg.RootCAs, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}); err != nil {
+		return errors.New("untrusted renewal")
+	}
+	tmp, err := os.CreateTemp(c.stateDir, "certificate-*.tmp")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+	if err = tmp.Chmod(0600); err == nil {
+		_, err = tmp.Write([]byte(result.Certificate))
+	}
+	if err == nil {
+		err = tmp.Sync()
+	}
+	closeErr := tmp.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	if err = os.Rename(name, filepath.Join(c.stateDir, "certificate.pem")); err != nil {
+		return err
+	}
+	cfg.Certificates = []tls.Certificate{identity}
+	c.HTTP.CloseIdleConnections()
+	c.HTTP.Transport = &http.Transport{TLSClientConfig: cfg}
+	c.leaf = leaf
+	return nil
+}
+func (c *Client) PublishInventory(ctx context.Context, snapshot inventory.Snapshot) error {
+	if err := snapshot.Validate(time.Now().UTC()); err != nil {
+		return err
+	}
+	var result map[string]string
+	return post(ctx, c.HTTP, c.URL, "/v1/agent/inventory", snapshot, &result)
 }

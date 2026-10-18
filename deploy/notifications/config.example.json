@@ -1,0 +1,7 @@
+{
+  "credentials_file": "/run/secrets/firebase-service-account.json",
+  "group_seconds": 60,
+  "rules": [
+    {"rule_id": "explicitly-qualified-rule", "urgent": false, "escalate_seconds": 0, "max_escalations": 0}
+  ]
+}

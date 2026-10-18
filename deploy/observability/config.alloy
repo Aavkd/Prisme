@@ -1,0 +1,205 @@
+logging {
+  level = "warn"
+}
+prometheus.remote_write "metrics" {
+  endpoint {
+    url = "http://victoriametrics:8428/api/v1/write"
+  }
+  wal {
+    max_keepalive_time = "2h"
+  }
+}
+prometheus.exporter.blackbox "checks" {
+  config = "{modules: {http_2xx: {prober: http, timeout: 3s, http: {preferred_ip_protocol: ip4, follow_redirects: false}}, tcp_connect: {prober: tcp, timeout: 3s}}}"
+  target {
+    name = "local-pilot"
+    address = "http://pilot:8080/health"
+    module = "http_2xx"
+    labels = {server = "docker-desktop", project = "phase2-pilot", environment = "development", service = "web"}
+  }
+}
+prometheus.scrape "checks" {
+  targets = prometheus.exporter.blackbox.checks.targets
+  scrape_interval = "5s"
+  scrape_timeout = "4s"
+  forward_to = [prometheus.remote_write.metrics.receiver]
+}
+prometheus.exporter.unix "host" {
+  rootfs_path = "/host/root"
+  procfs_path = "/host/proc"
+  sysfs_path = "/host/sys"
+  set_collectors = ["cpu", "loadavg", "meminfo", "filesystem", "diskstats", "netdev", "stat", "time", "uname"]
+}
+prometheus.scrape "host" {
+  targets = prometheus.exporter.unix.host.targets
+  scrape_interval = "15s"
+  forward_to = [prometheus.relabel.host.receiver]
+}
+prometheus.relabel "host" {
+  rule {
+    target_label = "server"
+    replacement = "docker-desktop"
+  }
+  rule {
+    target_label = "project"
+    replacement = "infrastructure"
+  }
+  rule {
+    target_label = "environment"
+    replacement = "development"
+  }
+  rule {
+    target_label = "service"
+    replacement = "host"
+  }
+  forward_to = [prometheus.remote_write.metrics.receiver]
+}
+prometheus.exporter.cadvisor "docker" {
+  docker_only = true
+  containerd_host = "/rootfs/run/containerd/containerd.sock"
+  containerd_namespace = "moby"
+  store_container_labels = false
+  allowlisted_container_labels = ["prisme.observation", "prisme.project", "prisme.environment", "com.docker.compose.service"]
+}
+prometheus.scrape "docker" {
+  // Docker Desktop's containerd exporter omits Compose labels. Join the selected
+  // Docker discovery target to its cAdvisor sample by immutable container ID.
+  targets = discovery.relabel.metric_targets.output
+  scrape_interval = "15s"
+  forward_to = [prometheus.relabel.docker.receiver]
+}
+prometheus.relabel "docker" {
+  rule {
+    source_labels = ["id"]
+    regex = "(?:/docker/|/system.slice/docker-)([a-f0-9]{64})(?:\\.scope)?"
+    target_label = "__tmp_sample_id"
+  }
+  rule {
+    source_labels = ["__tmp_sample_id"]
+    target_label = "container_id"
+    action = "keepequal"
+  }
+  rule {
+    source_labels = ["container_name"]
+    target_label = "name"
+  }
+  rule {
+    regex = "container_label_.*|id|image|container_id|container_name|exported_.*|__tmp_.*"
+    action = "labeldrop"
+  }
+  forward_to = [prometheus.remote_write.metrics.receiver]
+}
+prometheus.exporter.self "alloy" {}
+prometheus.scrape "alloy" {
+  targets = prometheus.exporter.self.alloy.targets
+  scrape_interval = "15s"
+  forward_to = [prometheus.relabel.alloy.receiver]
+}
+prometheus.relabel "alloy" {
+  rule {
+    target_label = "server"
+    replacement = "docker-desktop"
+  }
+  rule {
+    target_label = "project"
+    replacement = "infrastructure"
+  }
+  rule {
+    target_label = "environment"
+    replacement = "development"
+  }
+  rule {
+    target_label = "service"
+    replacement = "alloy"
+  }
+  forward_to = [prometheus.remote_write.metrics.receiver]
+}
+discovery.docker "selected" {
+  host = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+  filter {
+    name = "label"
+    values = ["prisme.observation=true", "com.docker.compose.project=prisme-dev"]
+  }
+}
+discovery.relabel "logs" {
+  targets = discovery.docker.selected.targets
+  rule {
+    target_label = "server"
+    replacement = "docker-desktop"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_prisme_project"]
+    target_label = "project"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_prisme_environment"]
+    target_label = "environment"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_prisme_service"]
+    target_label = "service"
+  }
+}
+discovery.relabel "metric_targets" {
+  targets = discovery.relabel.logs.output
+  rule {
+    target_label = "__address__"
+    replacement = "alloy:12345"
+  }
+  rule {
+    target_label = "__metrics_path__"
+    replacement = "/api/v0/component/prometheus.exporter.cadvisor.docker/metrics"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_id"]
+    target_label = "container_id"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex = "/(.+)"
+    target_label = "container_name"
+  }
+}
+loki.source.docker "selected" {
+  host = "unix:///var/run/docker.sock"
+  targets = discovery.relabel.logs.output
+  refresh_interval = "5s"
+  forward_to = [loki.process.sanitized.receiver]
+}
+loki.process "sanitized" {
+  stage.json {
+    expressions = {level = "level"}
+  }
+  stage.template {
+    source = "level"
+    template = "{{ if eq .Value \"error\" }}error{{ else if eq .Value \"warning\" }}warning{{ else if eq .Value \"debug\" }}debug{{ else }}info{{ end }}"
+  }
+  stage.replace {
+    expression = "(?i)(?:password|passwd|secret|token|api[_-]?key|authorization|cookie)\\\"?\\s*[:=]\\s*(\\\"[^\\\"]*\\\"|'[^']*'|[^\\s,;]+)"
+    replace = "[REDACTED]"
+  }
+  stage.replace {
+    expression = "(?i)Bearer\\s+([A-Za-z0-9._~+/=-]+)"
+    replace = "[REDACTED]"
+  }
+  stage.drop {
+    expression = ".*PRIVATE KEY.*"
+  }
+  stage.replace {
+    expression = "https?://([^\\s/@:]+:[^\\s/@]+)@"
+    replace = "[REDACTED]"
+  }
+  stage.labels {
+    values = {level = ""}
+  }
+  stage.label_keep {
+    values = ["server", "project", "environment", "service", "level"]
+  }
+  forward_to = [loki.write.logs.receiver]
+}
+loki.write "logs" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

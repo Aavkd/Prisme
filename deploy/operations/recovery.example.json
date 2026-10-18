@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "state_root": "/var/lib/prisme-recovery",
+  "master_key_file": "",
+  "targets": [
+    {
+      "id": "vps-recovery",
+      "name": "VPS recovery",
+      "environment": "production",
+      "address": "127.0.0.1:22",
+      "user": "prisme-operator",
+      "key_file": "/etc/prisme-recovery/ssh-key",
+      "host_key": "SHA256:REPLACE_WITH_VERIFIED_HOST_FINGERPRINT",
+      "terminal": false,
+      "files": false,
+      "diagnostics": false,
+      "containers": [],
+      "roots": ["/srv/prisme-managed"],
+      "guard_path": "/usr/local/bin/prisme-host-guard",
+      "coordination_root": "/var/lib/prisme-coordination",
+      "lock_target": "vps"
+    }
+  ]
+}

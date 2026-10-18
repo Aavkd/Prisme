@@ -6,10 +6,12 @@ COPY cmd ./cmd
 COPY internal ./internal
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/agent ./cmd/agent && \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/probe ./cmd/probe
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/probe ./cmd/probe && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pilot ./cmd/observation-pilot
 RUN mkdir /state && chown 10001:10001 /state
 
 FROM scratch AS api
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /out/api /api
 COPY --from=build /out/probe /probe
 USER 10001:10001
@@ -20,3 +22,9 @@ COPY --from=build /out/agent /agent
 COPY --from=build --chown=10001:10001 /state /state
 USER 10001:10001
 ENTRYPOINT ["/agent"]
+
+FROM scratch AS pilot
+COPY --from=build /out/pilot /pilot
+COPY --from=build --chown=10001:10001 /state /control
+USER 10001:10001
+ENTRYPOINT ["/pilot"]

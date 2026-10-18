@@ -1,0 +1,12 @@
+# Provision .dev/notifications.json and .dev/firebase-service-account.json first.
+services:
+  api:
+    environment:
+      PRISME_NOTIFICATION_CONFIG: /etc/prisme/notifications.json
+    volumes:
+      - ../.dev/notifications.json:/etc/prisme/notifications.json:ro
+    secrets:
+      - firebase_service_account
+secrets:
+  firebase_service_account:
+    file: ../.dev/firebase-service-account.json

@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Prisme project manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "id",
+    "project",
+    "environment",
+    "server",
+    "repository_id",
+    "repository",
+    "branch",
+    "enabled",
+    "legacy",
+    "strategy",
+    "migration",
+    "backup_required",
+    "observation_seconds",
+    "timeout_seconds",
+    "minimum_free_bytes",
+    "network",
+    "services",
+    "caddy_url",
+    "caddy_id",
+    "ingress_service",
+    "public_health_url"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+    },
+    "project": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+    },
+    "environment": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,39}$"
+    },
+    "server": {
+      "type": "string"
+    },
+    "repository_id": {
+      "type": "string"
+    },
+    "repository": {
+      "type": "string"
+    },
+    "branch": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "legacy": {
+      "type": "boolean"
+    },
+    "strategy": {
+      "type": "string",
+      "enum": [
+        "recreate",
+        "blue-green"
+      ]
+    },
+    "migration": {
+      "type": "string",
+      "enum": [
+        "none",
+        "backward-compatible",
+        "incompatible"
+      ]
+    },
+    "backup_required": {
+      "type": "boolean"
+    },
+    "backup_policy": {"type":"string","pattern":"^[a-z][a-z0-9-]{0,39}$"},
+    "backup_max_age_seconds": {"type":"integer","minimum":60,"maximum":86400},
+    "observation_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 600
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 1800
+    },
+    "minimum_free_bytes": {
+      "type": "integer",
+      "minimum": 1048576
+    },
+    "network": {
+      "type": "string"
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "port",
+          "blue_port",
+          "green_port",
+          "health_path",
+          "docker_health",
+          "env_file",
+          "stateless"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer"
+          },
+          "blue_port": {
+            "type": "integer"
+          },
+          "green_port": {
+            "type": "integer"
+          },
+          "health_path": {
+            "type": "string"
+          },
+          "docker_health": {
+            "type": "boolean"
+          },
+          "env_file": {
+            "type": "string"
+          },
+          "stateless": {
+            "type": "boolean"
+          }
+        }
+      },
+      "minItems": 1,
+      "maxItems": 20
+    },
+    "caddy_url": {
+      "type": "string"
+    },
+    "caddy_id": {
+      "type": "string"
+    },
+    "ingress_service": {
+      "type": "string"
+    },
+    "public_health_url": {
+      "type": "string"
+    }
+  }
+}

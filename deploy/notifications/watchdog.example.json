@@ -1,0 +1,8 @@
+{
+  "url": "https://control-plane.example.invalid/readyz",
+  "state_file": "/var/lib/prisme-watchdog/state.json",
+  "credentials_file": "/etc/prisme-watchdog/firebase-service-account.json",
+  "tokens": [],
+  "threshold": 3,
+  "preferences": {"enabled": true, "timezone": "Europe/Paris", "quiet_start": 1320, "quiet_end": 420}
+}

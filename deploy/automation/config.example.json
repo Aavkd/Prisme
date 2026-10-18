@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "targets": [
+    {
+      "id": "pilot-web",
+      "deployment": "pilot-test",
+      "server": "isolated-local",
+      "project": "pilot",
+      "environment": "test",
+      "service": "web",
+      "rule": "pilot-health"
+    }
+  ]
+}

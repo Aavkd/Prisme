@@ -1,0 +1,10 @@
+{
+  "app_id": "1",
+  "installation_id": "2",
+  "private_key_file": "/run/secrets/github_app_key",
+  "webhook_secret_file": "/run/secrets/github_webhook_secret",
+  "repositories": [
+    {"id": "3", "name": "YOUR_OWNER/sounding-lines", "environment": "production", "workflow_id": "5"},
+    {"id": "4", "name": "YOUR_OWNER/arpent", "environment": "production", "workflow_id": "6"}
+  ]
+}

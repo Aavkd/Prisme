@@ -1,0 +1,17 @@
+{
+  "id": "pilot-inspection",
+  "version": 1,
+  "target": "pilot-web",
+  "parameters": {
+    "pause": {"type": "integer", "min": 1, "max": 60}
+  },
+  "steps": [
+    {"action": "check", "when": "always", "seconds": 5, "timeout_seconds": 10, "retries": 1},
+    {"action": "wait", "when": "failed", "parameter": "pause", "timeout_seconds": 60},
+    {"action": "restart", "when": "failed", "timeout_seconds": 30},
+    {"action": "check", "when": "always", "seconds": 10, "timeout_seconds": 10, "retries": 2},
+    {"action": "notify", "when": "always", "timeout_seconds": 5}
+  ],
+  "timeout_seconds": 300,
+  "maintenance_until": null
+}

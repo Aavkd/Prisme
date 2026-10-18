@@ -1,0 +1,29 @@
+[Unit]
+Description=Prisme bounded automation worker
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prisme-deployer
+Group=prisme-deployer
+EnvironmentFile=/etc/prisme/automation/worker.env
+ExecStart=/usr/local/bin/prisme-automation -config /etc/prisme/automation/config.json -deployments /etc/prisme/deployment/config.json
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=40
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/prisme-deployer /var/lib/prisme-coordination
+MemoryMax=384M
+TasksMax=64
+# Adapt the exact deployment root, Docker permissions and credential paths.
+# Share the host guard and loopback network with all other host workers.
+# This template does not install or enable the service.
+
+[Install]
+WantedBy=multi-user.target

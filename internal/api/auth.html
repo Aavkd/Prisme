@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prisme · Connexion / Sign in</title>
+<style>body{color:#edf1f6;background:#11151c;font:16px system-ui;max-width:32rem;margin:8vh auto;padding:24px}button,input{font:inherit;padding:14px;margin:8px 0;box-sizing:border-box;width:100%;border-radius:8px}button{cursor:pointer}label,p{line-height:1.6}details{margin-top:24px}#status{min-height:3em}</style>
+<h1>Prisme</h1><p>Autoriser la connexion de votre application.<br>Authorize your app to sign in.</p>
+<p id="device"></p><button id="login">Utiliser une passkey / Use a passkey</button>
+<details><summary>Créer ou récupérer / Set up or recover</summary>
+<p>Secret d’initialisation, code de secours ou ticket d’ajout.<br>Setup secret, recovery code or additional passkey ticket.</p>
+<label for="authorization">Code</label><input id="authorization" type="password" autocomplete="off">
+<button id="register">Enregistrer une passkey / Register a passkey</button>
+<p>Un code de secours remplace les anciennes passkeys et ferme toutes les sessions.<br>A recovery code replaces existing passkeys and ends all sessions.</p></details>
+<p id="status" role="status" aria-live="polite"></p><script src="/auth.js" defer></script></html>

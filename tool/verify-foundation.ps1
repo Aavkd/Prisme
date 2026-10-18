@@ -15,5 +15,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Generated API is stale.' }
     & docker compose -f deploy/compose.dev.yml config --quiet
     if ($LASTEXITCODE -ne 0) { throw 'Compose configuration is invalid.' }
+    & docker compose -f deploy/compose.dev.yml -f deploy/compose.observability.yml config --quiet
+    if ($LASTEXITCODE -ne 0) { throw 'Observability Compose configuration is invalid.' }
+    & docker compose -f deploy/compose.dev.yml -f deploy/compose.github.yml config --quiet
+    if ($LASTEXITCODE -ne 0) { throw 'GitHub Compose configuration is invalid.' }
+    & docker compose -f deploy/compose.dev.yml -f deploy/compose.notifications.yml config --quiet
+    if ($LASTEXITCODE -ne 0) { throw 'Notification Compose configuration is invalid.' }
     if ($Integration) { & ./tool/test-integration.ps1 }
 } finally { Pop-Location }

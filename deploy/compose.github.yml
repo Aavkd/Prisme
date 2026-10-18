@@ -1,0 +1,16 @@
+# Opt-in only: populate .dev/github/ from deploy/github/config.example.json.
+# IDs in the example are placeholders, not registered repositories.
+services:
+  api:
+    environment:
+      PRISME_GITHUB_CONFIG: /etc/prisme/github.json
+    volumes:
+      - ../.dev/github/config.json:/etc/prisme/github.json:ro
+    secrets:
+      - github_app_key
+      - github_webhook_secret
+secrets:
+  github_app_key:
+    file: ../.dev/github/app-key.pem
+  github_webhook_secret:
+    file: ../.dev/github/webhook-secret

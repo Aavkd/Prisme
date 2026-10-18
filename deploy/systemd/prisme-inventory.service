@@ -1,0 +1,20 @@
+[Unit]
+Description=Prisme read-only Docker inventory collector
+
+[Service]
+Type=oneshot
+User=prisme-collector
+Group=prisme-observation
+SupplementaryGroups=docker
+StateDirectory=prisme-observation
+StateDirectoryMode=0750
+ExecStart=/usr/local/bin/prisme-inventory -output /var/lib/prisme-observation/inventory.json -group-readable
+TimeoutStartSec=55
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
+UMask=0027

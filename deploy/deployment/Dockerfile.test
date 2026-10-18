@@ -1,0 +1,4 @@
+FROM caddy:2-alpine AS caddy
+FROM docker:29-cli
+COPY --from=caddy /usr/bin/caddy /usr/local/bin/caddy
+ENTRYPOINT []

@@ -1,0 +1,30 @@
+[Unit]
+Description=Prisme Caddy and Cloudflare worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prisme-edge
+Group=prisme-edge
+EnvironmentFile=/etc/prisme/edge/worker.env
+ExecStart=/usr/local/bin/prisme-edge -config /etc/prisme/edge/config.json
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=40
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/caddy /var/lib/prisme-coordination /var/lib/prisme-edge
+Environment=XDG_DATA_HOME=/var/lib/prisme-edge
+Environment=XDG_CONFIG_HOME=/var/lib/prisme-edge
+MemoryMax=384M
+TasksMax=32
+# The worker and Caddy must share the same filesystem paths and loopback network.
+# Configure exact permissions and the shared host-guard identity before installing.
+
+[Install]
+WantedBy=multi-user.target

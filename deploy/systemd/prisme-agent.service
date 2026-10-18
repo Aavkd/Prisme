@@ -1,0 +1,28 @@
+[Unit]
+Description=Prisme outgoing agent (unprivileged)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=prisme-agent
+Group=prisme-observation
+StateDirectory=prisme-agent
+StateDirectoryMode=0700
+ExecStart=/usr/local/bin/prisme-agent -url https://API_DOMAIN -ca /etc/prisme/ca.pem -token-file /etc/prisme/enrollment-token -state-dir /var/lib/prisme-agent -inventory-file /var/lib/prisme-observation/inventory.json -name SERVER_NAME
+Restart=on-failure
+RestartSec=30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

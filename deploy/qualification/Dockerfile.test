@@ -1,0 +1,19 @@
+FROM golang:1.26.8-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY internal ./internal
+RUN CGO_ENABLED=0 go test -c -o /out/restore.test ./internal/controlplane && \
+    CGO_ENABLED=0 go test -c -o /out/api.test ./internal/api && \
+    CGO_ENABLED=0 go test -c -o /out/notifications.test ./internal/notifications
+
+FROM alpine:3.22
+RUN apk add --no-cache postgresql17 postgresql17-client restic su-exec && \
+    mkdir -p /fixture/pg /fixture/socket && chown -R postgres:postgres /fixture
+COPY --from=build /out/ /tests/
+COPY internal/store/migrations /internal/store/migrations
+COPY deploy/qualification/test-entrypoint.sh /test-entrypoint.sh
+WORKDIR /internal/api
+ENV PRISME_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable
+ENV PRISME_TEST_RESTORE=1 PRISME_TEST_LOAD=1
+ENTRYPOINT ["sh", "/test-entrypoint.sh"]

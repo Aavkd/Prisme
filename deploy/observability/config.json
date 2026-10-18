@@ -1,0 +1,11 @@
+{
+  "scopes": [
+    {"id":"local-pilot","server":"docker-desktop","project":"phase2-pilot","environment":"development","service":"web"},
+    {"id":"local-host","server":"docker-desktop","project":"infrastructure","environment":"development","service":"host"},
+    {"id":"local-alloy","server":"docker-desktop","project":"infrastructure","environment":"development","service":"alloy"}
+  ],
+  "rules": [
+    {"id":"LOCAL-PILOT-HTTP","scope_id":"local-pilot","title":"Local pilot HTTP unavailable","metric":"probe_success","operator":"below","open_threshold":1,"resolve_threshold":1,"for_seconds":15,"recovery_seconds":15,"min_samples":3,"freshness_seconds":45,"severity":"critical","enabled":true,"inhibited_by":[]},
+    {"id":"LOCAL-HOST-LOAD","scope_id":"local-host","title":"Docker Linux host load elevated","metric":"node_load1","operator":"above","open_threshold":16,"resolve_threshold":8,"for_seconds":900,"recovery_seconds":120,"min_samples":6,"freshness_seconds":90,"severity":"warning","enabled":false,"inhibited_by":[]}
+  ]
+}
