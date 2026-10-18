@@ -60,12 +60,22 @@ def main():
         wait_for('No unresolved local exercise', lambda: not incident({'detected','reopened','acknowledged','diagnosing','monitoring'}))
         pilot('-fail')
         opened = wait_for('Controlled outage opened a correlated incident', lambda: incident({'detected','reopened'}))
-        now = dt.datetime.now(dt.timezone.utc)
-        query = {'scope':'local-pilot','start':(now-dt.timedelta(minutes=10)).isoformat(),'end':now.isoformat(),'metric':'probe_success'}
-        metrics = api('/v1/observability/metrics?'+urllib.parse.urlencode(query))
-        assert any(p['value']==0 for series in metrics['series'] for p in series['points']), 'No failing metric'
-        logs = api('/v1/observability/logs?'+urllib.parse.urlencode({**query,'search':'controlled local pilot outage'}))
-        assert logs['lines'], 'No correlated outage logs in Loki'
+        # VictoriaMetrics hides the latest 30 s of range queries by default and the
+        # incident can open sooner: retry instead of reading the graph only once.
+        def window():
+            now = dt.datetime.now(dt.timezone.utc)
+            return {'scope':'local-pilot','start':(now-dt.timedelta(minutes=10)).isoformat(),'end':now.isoformat(),'metric':'probe_success'}
+        def failing_metric():
+            query = window()
+            metrics = api('/v1/observability/metrics?'+urllib.parse.urlencode(query))
+            return query if any(p['value']==0 for series in metrics['series'] for p in series['points']) else None
+        query = wait_for('Failing samples visible in VictoriaMetrics', failing_metric, 90)
+        def outage_logs():
+            logs = api('/v1/observability/logs?'+urllib.parse.urlencode({**window(),'search':'controlled local pilot outage'}))
+            return logs if logs['lines'] else None
+        logs = wait_for('Correlated outage logs visible in Loki', outage_logs, 90)
+        # Reload the revision: the incident may have moved while waiting for the stores.
+        opened = incident({'detected','reopened'}) or opened
         api('/v1/incidents/'+opened['id']+'/events', {'action':'acknowledge','note':'Local controlled failure verified with Alloy, VictoriaMetrics and Loki.','revision':opened['revision']})
         pilot('-recover')
         resolved = wait_for('Stable recovery automatically resolved the incident', lambda: incident({'resolved'}))
