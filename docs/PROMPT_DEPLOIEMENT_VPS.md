@@ -41,6 +41,14 @@ Windows** : il est dans les transports puis indisponible par moments. Conséquen
   Alexy a décidé d'utiliser le **disque `D:`** de la tour (c'est le seul qui a de la place) : clone, caches Go/Dart/Flutter,
   données Docker Desktop/WSL y sont acceptés.
 - Outils : Go 1.26.8, Flutter 3.38.5, Docker Desktop (moteur Linux/WSL2), PostgreSQL (tests), `gh` connecté, `git`.
+  Relevé du 18/10/2026 : **présents** `git` et Docker ; **absents** Go, Flutter, `gh`, PostgreSQL, Restic. `C:` n'a que
+  ≈ 2,5 Go libres, `D:` ≈ 100 Go. Installe les outils manquants en versions **portables sur `D:`** (ex. `D:\tools\`), sans
+  rien installer sur `C:` ni modifier le système ; `./tool/test-backups-native.ps1` accepte des binaires PostgreSQL/Restic
+  portables. Pour `gh` : demande à Alexy de s'authentifier (ne manipule pas de jeton). Clone dans `D:\Prisme`.
+- Les deux fichiers Firebase sont **déjà sur la tour**, dans `D:\PrismeSecrets\` (droits : `speee` et SYSTEM seulement) :
+  `google-services.json` et `prisme-*-firebase-adminsdk-*.json` (compte de service complet). Ne les copie
+  pas dans le dépôt, ne les affiche pas ; référence-les par chemin dans la configuration. Pour la production (étape 6), crée
+  avec Alexy un compte de service **limité à l'envoi FCM** et fais révoquer celui-ci ensuite.
 - Accès au VPS : alias SSH `ovh-mantara` (utilisateur `ubuntu`) fonctionnel **depuis la tour**
   (`ssh -o BatchMode=yes ovh-mantara true`). Si l'alias ou la clé manque, **arrête-toi et demande** : ne génère pas
   de nouvelle clé de ta propre initiative.
