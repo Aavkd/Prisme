@@ -20,7 +20,7 @@ Une entrée par étape : fait, vérifié, reste. Rien n'est affirmé sans preuve
 
 ### Fait
 
-- **CI GitHub rouge depuis le 18/10** (4 jobs sur 12 depuis `1966abb`) : causes trouvées et corrigées.
+- **CI GitHub rouge depuis le 18/10** (4 jobs sur 11 depuis `1966abb`) : causes trouvées et corrigées.
   - `TestCollectorExcludesSecretsAndReportsDockerFailure` (Linux) : `platform.platform()` lance
     `uname -p` en sous-processus sous Linux (et peut lancer `ver` sous Windows chargé) ; le faux
     `Popen` du test refusait tout ce qui n'est pas `docker`. Cause confirmée en rejouant l'ancien
@@ -48,6 +48,15 @@ Une entrée par étape : fait, vérifié, reste. Rien n'est affirmé sans preuve
     devient une erreur. `apps/prisme_client/windows/CMakeLists.txt` définit
     `_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS` (solution temporaire documentée par
     Microsoft) ; à retirer quand le plugin passera aux coroutines C++20.
+- **Troisième et quatrième passages** : l'exercice d'observabilité lisait le graphique une seule
+  fois, or VictoriaMetrics masque les 30 dernières secondes des requêtes de plage et l'incident
+  s'ouvre ≈ 27 s après la panne sur le runner : le script réessaie désormais (métriques et logs)
+  et relit la révision avant l'acquittement. Ensuite, cAdvisor ne voyait aucun conteneur sur le
+  runner : celui-ci utilisait encore le stockage `overlay2`, où cAdvisor doit lire
+  `/var/lib/docker/image/overlay2/layerdb` (réservé à root). **Le VPS (Docker 29.6.1) et Docker
+  Desktop utilisent le stockage containerd** (`overlayfs`, `io.containerd.snapshotter.v1`) : la CI
+  active donc ce stockage et donne à Alloy le groupe du socket containerd, comme il faudra le
+  faire en production. **CI entièrement verte (11/11) sur `11c25bb`.**
 - **Watchdog** (code + tests Go) :
   - `urgent` (défaut `false`) : renseigne `Payload.Urgent` (priorité FCM haute) **et** fait passer
     panne et récupération à travers les horaires silencieux (`Due(now, urgent, 0)`, auparavant
@@ -111,7 +120,11 @@ Résultats réels sur la tour, le 18/10/2026 au soir :
    Docker interne ou `127.0.0.1` uniquement), jamais via `prisme.mantara.fr`.
 6. **Réseaux et ports** : supprimer `ports: 127.0.0.1:8443` ; API sur `control` (interne) + `edge`
    (alias `prisme-api`) ; base, stores et Alloy sur `control` seulement.
-7. **Alloy** : libellés `server=docker-desktop` / `environment=development` → `ovh-mantara` /
+7. **Alloy** : sur le VPS, `/run/containerd/containerd.sock` est `root:root 0660` et
+   `/var/run/docker.sock` appartient au groupe `docker` (986) : Alloy (UID 473) aura besoin des
+   groupes `986` **et** `0` (`PRISME_DOCKER_SOCKET_GID=986`, `PRISME_CONTAINERD_SOCKET_GID=0`).
+   Le groupe root reste un privilège à valider par Alexy, même si l'accès au socket Docker est
+   déjà équivalent à root. Libellés `server=docker-desktop` / `environment=development` → `ovh-mantara` /
    `production` ; supprimer la cible `local-pilot` et le service `pilot` ; filtre de découverte
    limité à `prisme-dev` à revoir (cAdvisor sur les 35 conteneurs, **sans** collecter leurs logs
    par défaut) ; `discovery.relabel` pointe `alloy:12345` (nom de service à garder).
@@ -131,10 +144,25 @@ Résultats réels sur la tour, le 18/10/2026 au soir :
 
 ### Reste
 
-- Laisser la CI GitHub confirmer les deux derniers correctifs (Alloy, build Windows).
-- Décision sur le point 2 (observabilité HTTP interne) avant d'écrire le compose de production.
+- Travail local encore à faire avant l'étape 2 (sans effet sur le VPS) : compose de production,
+  commande de réémission du certificat serveur (point 3), correctif du point 2 selon la décision,
+  correctif `RawMetric` (point 8), config Alloy de production.
+- État de la tour en fin d'étape : Docker Desktop laissé démarré ; PostgreSQL de test arrêté
+  (données dans `D:\tools\pgtest`) ; pile `prisme-dev` arrêtée (volumes conservés) ; `D:` ≈ 97 Go
+  libres ; aucune erreur disque constatée. RAM de la tour : ≈ 1,8 Go libres sur 16 Go pendant les
+  essais, dont ≈ 6,6 Go retenus par la VM de Docker Desktop (`vmmem`).
 
 ## En attente d'accord
 
-Aucune action sur le VPS, le DNS ou Firebase n'a été faite. L'étape 2 sera proposée ici
-avec ses commandes exactes avant toute exécution.
+Aucune action sur le VPS, le DNS ou Firebase n'a été faite (seules des lectures : `free`, `df`,
+`docker ps -q`, `docker info`, droits des sockets). Décisions demandées à Alexy avant l'étape 2 :
+
+1. **Observabilité interne en HTTP** (point 2) : option (a) recommandée — autoriser HTTP
+   uniquement vers un nom de service Docker sans point, sur le réseau interne, via une variable
+   explicite ; ou option (b) TLS devant VictoriaMetrics et Loki.
+2. **Groupe root pour Alloy** (point 7) : nécessaire pour lire le socket containerd du VPS et donc
+   les métriques des 35 conteneurs ; sinon, pas de mesures par conteneur.
+3. **Suppression du clone `D:\Prisme`** fait par erreur (à faire par Alexy :
+   `Remove-Item -Recurse -Force D:\Prisme`).
+
+L'étape 2 sera ensuite proposée ici avec ses commandes exactes avant toute exécution.
