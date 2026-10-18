@@ -2,10 +2,10 @@
 
 ## Spécification produit, fonctionnelle et technique
 
-**Version :** 0.8\
+**Version :** 0.17\
 **Date de création :** 4 septembre 2026  
-**Dernière mise à jour :** 6 septembre 2026  
-**Statut :** document vivant — socle UI et fondation locale phase 0 implémentés ; production non autorisée par le diagnostic\
+**Dernière mise à jour :** 13 septembre 2026
+**Statut :** document vivant — phases 0 à 9 implémentées localement, parcours FCM/biométrie de phase 5 vérifié sur S24 ; secours et pilotes réels à qualifier, production non autorisée par le diagnostic\
 **Propriétaire :** Mantara  
 **Nom du produit :** Prisme provisoire ; nom définitif à définir\
 **Clients cibles :** Android et Windows  
@@ -3239,6 +3239,21 @@ L'identifiant Android `dev.mantara.prisme_client` et le nom Prisme sont provisoi
 Le runner Android possède la permission Internet et désactive le backup, mais
 n'a pas encore été validé sur le téléphone. Il n'existe aucun runner web produit.
 
+### 10.2.9 Extension phase 1 disponible
+
+Au 7 septembre 2026, le client `apps/prisme_client` 0.2.0+2 reprend le même socle
+et ajoute Serveurs, fiches d'inventaire, groupes Compose, sélection d'accueil par
+appareil, appareils/récupération et audit. Les préférences visuelles sont persistées
+localement ; les épingles sont associées en base à l'ID d'installation. Les sessions
+et observations restent en mémoire et sont effacées au verrouillage.
+
+Le navigateur système effectue les cérémonies passkey via une page de connexion
+minimale ; il ne reçoit pas le token de session native. Le mode de développement
+reste explicite. La liste de serveurs, leur état et les projets du VPS proviennent
+du backend réel, sans fixtures produit. La fraîcheur d'inventaire est distincte du
+heartbeat et de la connectivité API. Le guide [PHASE_1](docs/PHASE_1.md) détaille
+les tests Windows/Android, la collecte SSH et les qualifications encore ouvertes.
+
 ## 10.3 Backend Go
 
 **Implémentation phase 0 :** Go 1.26.8, exécutable `cmd/api`, modules
@@ -3514,7 +3529,9 @@ notification décrite en section 7.12 ; elle ne prouve pas une panne des sites.
 sur le VPS depuis l'application lorsque la tour est éteinte ou déconnectée.
 L'ADR [0002](docs/adr/0002-independent-recovery.md) précise désormais la cible de
 conception : passerelle native sur VPS, tunnel/Access propres et identité indépendante.
-Elle n'est pas déployée en phase 0 ; ses scénarios de validation restent en phase 6.
+La passerelle et ses scénarios locaux sont désormais implémentés en phase 6 ;
+son installation sur le VPS et la qualification du canal indépendant restent à
+réaliser. Voir [PHASE_6](docs/PHASE_6.md).
 
 ### Contrat d'indépendance proposé
 
@@ -4144,6 +4161,12 @@ Passkeys, inventaire réel, rotation et authentification de production restent e
 
 ## Phase 1 — Flotte, identité et inventaire
 
+**État au 7 septembre 2026 :** composants logiciels livrés ; voir le
+[guide phase 1](docs/PHASE_1.md) et l'[ADR 0003](docs/adr/0003-phase-one-identity-and-inventory.md).
+Le VPS est collecté via SSH en lecture seule, sans installation ni mutation distante.
+La qualification des passkeys physiques Windows/S24 et du domaine final reste
+distincte des tests cryptographiques locaux.
+
 La phase 1 prolonge les contrats et modules livrés ; elle ne doit pas recréer le
 client, le monorepo, les migrations ou le socle UI. La session de développement
 ne doit pas devenir implicitement l'authentification de production. L'enrôlement
@@ -4169,6 +4192,14 @@ sans mutation de production.
 
 ## Phase 2 — Observabilité et incidents
 
+**État au 7 septembre 2026 :** composants locaux disponibles, migration 004,
+OpenAPI 0.3.0, profil Compose Alloy/VictoriaMetrics/Loki et vues Flutter Diagnostic.
+Une panne HTTP de fixture isolée ouvre un incident corrélé avec les vrais logs
+et métriques, puis se résout après récupération stable. Le test Windows natif
+lit cette chronologie. Les commandes, preuves, limites de collecte et accès runtime
+sont dans [PHASE_2](docs/PHASE_2.md). Cette preuve logicielle locale ne remplace pas
+l'exercice opérationnel sur Sounding Lines/Arpent, encore non déclenché.
+
 ### Livrables
 
 - Alloy ;
@@ -4193,6 +4224,14 @@ métriques, puis se résout correctement.
 
 ## Phase 3 — GitHub, builds et releases
 
+Les composants de consultation sont implémentés localement le 8 septembre 2026 :
+App privée, signatures/déduplication, polling durable, navigateur, builds/logs et
+modèle Release avec provenance par artefact. Le [guide phase 3](docs/PHASE_3.md)
+décrit les preuves, l'activation et les limites. Les deux pilotes sont exercés sur
+fixtures ; le critère de sortie opérationnel ci-dessous reste à vérifier après
+installation de l'App et publication réelle d'images immuables. Les mutations de
+code et commandes de workflows de la V1 ne sont pas activées dans cette livraison.
+
 ### Livrables
 
 - GitHub App ;
@@ -4209,6 +4248,17 @@ métriques, puis se résout correctement.
 Chaque build pilote est relié à son commit, son image immuable et son environnement.
 
 ## Phase 4 — Déploiements Docker Compose
+
+**État logiciel local :** manifeste JSON v1, import legacy Sounding Lines désactivé,
+plans approuvés, worker PostgreSQL durable, checks, promotion saine, rollback et
+blue-green Caddy disponibles. Le test réel local vérifie déploiement/restauration et
+continuité HTTP. Voir [PHASE_4](docs/PHASE_4.md) et le
+[contrat projet v1](contracts/project-v1.md). L'exécuteur est local et distinct du
+transport agent distant restant à qualifier. Les sauvegardes/migrations sensibles
+et l'approbation production non encore sécurisées restent bloquantes.
+
+**Critère opérationnel pilote :** encore ouvert ; l'import historique ne remplace
+pas la publication et la qualification d'images immuables de Sounding Lines.
 
 ### Livrables
 
@@ -4227,6 +4277,12 @@ Sounding Lines peut être déployé puis restauré vers une release précédente
 preuve, audit et absence d'interruption lorsque la stratégie le permet.
 
 ## Phase 5 — Mobile, notifications et actions
+
+**État au 9 septembre 2026 :** implémentation locale livrée ; schéma 7, OpenAPI 0.6.0.
+Le parcours panne HTTP locale réelle → FCM → fiche incident → signature biométrique
+Android → approbation a réussi sur le S24 physique le 8 septembre. Le watchdog
+indépendant est livré mais non installé sur le VPS. Voir [PHASE_5](docs/PHASE_5.md)
+pour la configuration, les preuves et les limites de qualification.
 
 ### Livrables
 
@@ -4254,6 +4310,12 @@ confirmée biométriquement.
 
 ## Phase 6 — Terminal, fichiers et secrets
 
+**État local au 9 septembre 2026 :** PTY SSH/WebSocket, SFTP, éditeur atomique,
+coffre par enveloppe, `.env`, preuves récentes, identité de secours indépendante,
+audit signé et garde d'hôte livrés. Tests sur OpenSSH isolé, PostgreSQL et Flutter ;
+preuves et limites dans [PHASE_6](docs/PHASE_6.md). Le service de secours n'est pas
+déployé sur le VPS réel. Les scénarios de panne de tour sont simulés localement.
+
 ### Livrables
 
 - terminal PTY WebSocket ;
@@ -4275,6 +4337,13 @@ dans les logs de la plateforme.
 
 ## Phase 7 — Sauvegardes et restaurations
 
+Implémentation locale disponible : worker Restic, PostgreSQL logique, fichiers/volumes
+préparés, rétention, vérification complète, restaurations de test approuvées et
+écran Flutter. Les déploiements peuvent exiger une copie vérifiée récente.
+Voir [PHASE_7](docs/PHASE_7.md) et le [contrat backup](contracts/backup-v1.md).
+Le scénario local utilise PostgreSQL et Restic réels avec données synthétiques ;
+la restauration d’une vraie base pilote et la destination hors site restent à qualifier.
+
 ### Livrables
 
 - Restic ;
@@ -4290,6 +4359,13 @@ dans les logs de la plateforme.
 Une copie de la base d'un projet pilote est restaurée sur une cible de test et validée.
 
 ## Phase 8 — Caddy et Cloudflare
+
+**État au 12 septembre 2026 :** composants locaux livrés ; voir
+[PHASE_8](docs/PHASE_8.md). Caddy utilise des fichiers possédés séparés, des plans
+approuvés, un rechargement conditionnel et un rollback vérifié. Cloudflare propose
+un inventaire DNS/tunnels et des plans de modification A/AAAA/CNAME. Le critère
+logiciel est exercé sur une route synthétique locale ; le vrai pilote reste à
+qualifier. Les fonctions Cloudflare avancées de 7.19 ne sont pas toutes livrées.
 
 ### Livrables
 
@@ -4307,6 +4383,13 @@ Une route pilote peut être modifiée puis restaurée sans casser les autres dom
 Caddy mutualisé.
 
 ## Phase 9 — Autonomie et runbooks
+
+**État au 12 septembre 2026 :** livré localement avec la migration 011, le worker
+`cmd/automation`, les politiques et runbooks versionnés, les contrôles persistants
+et la page FR/EN. Une panne Docker Compose contrôlée produit un restart puis un
+rollback sain ; un échec persistant ouvre le circuit au seuil exact. Voir
+[PHASE_9](docs/PHASE_9.md) et [automation v1](contracts/automation-v1.md) pour les
+preuves, adaptateurs disponibles et qualifications pilotes restantes.
 
 ### Livrables
 
@@ -4648,6 +4731,152 @@ Une fonctionnalité distante n'est pas terminée si :
 
 ## 23. Journal des décisions
 
+### 12 septembre 2026 — autonomie et runbooks locaux de phase 9 (v0.17)
+
+À la demande de l’utilisateur, ajout de la migration 011, des définitions et
+exécutions persistantes, du worker Linux d’automatisation et de la page FR/EN.
+Les mutations réutilisent le moteur de déploiement, le garde d’hôte et les preuves
+renforcées. Le stop initial, les limites par incident, le circuit persistant,
+les versions exactes et l’absence de replay après interruption sont testés.
+Le scénario Docker réel vérifie un restart puis un rollback sain ; les tests
+à échec persistant vérifient l’arrêt au seuil et la chronologie corrélée.
+Le [guide phase 9](docs/PHASE_9.md) distingue ce qui est livré des calendriers,
+adaptateurs et qualifications opérationnelles encore ouverts. Aucune autonomie
+n’est activée sur les pilotes réels et le NO-GO production de la tour est inchangé.
+
+### 12 septembre 2026 — Caddy et Cloudflare locaux de phase 8 (v0.16)
+
+À la demande de l’utilisateur, ajout de la migration 010, du module edge et d’un
+worker Linux distinct. Le client réutilise Prisme UI pour les observations,
+les diffs, les approbations renforcées et les plans inverses. Les snapshots et
+révisions sont persistants ; les mutations interrompues exigent réconciliation.
+Caddy conserve le fichier historique et gère une route dans un fichier possédé,
+avec validation, rechargement conditionnel, checks et restauration. Cloudflare
+sépare lecture/écriture, inventorie DNS/tunnels et borne les mutations au contenu
+d’enregistrements existants. Les preuves et limites sont dans [PHASE_8](docs/PHASE_8.md).
+Aucune configuration du VPS ni ressource Cloudflare réelle n’est modifiée.
+
+### 11 septembre 2026 — sauvegardes et restaurations locales (v0.15)
+
+- Ajout d’un worker Restic indépendant, schéma 009 et contrat OpenAPI 0.8.0.
+- Sauvegardes PostgreSQL logiques et fichiers/volumes préparés, lecture complète
+  d’intégrité, rétention protégeant les copies vérifiées et incidents d’échec.
+- Restaurations vers de nouvelles cibles de test, preuve fraîche, validation SQL
+  et nettoyage des tests planifiés. Pas de remplacement d’une base de production.
+- Client Flutter FR/EN et lien entre copie récente et plan de déploiement sensible.
+- Scénarios réels locaux PostgreSQL/Restic vérifiés sur des données synthétiques.
+  Docker Desktop reste bloqué ; le déploiement Linux et le vrai pilote restent à qualifier.
+
+
+### 9 septembre 2026 — terminal, fichiers, coffre et secours locaux (v0.14)
+
+Implémentation de phase 6 à partir des composants précédents : SSH avec empreinte
+épinglée, PTY natif et reprise sans rejeu, SFTP borné avec backup/rename atomique,
+chiffrement par enveloppe et `.env` résolu côté serveur. Les preuves sensibles
+portent sur la requête complète et sont consommées une seule fois.
+
+La passerelle native suit l'ADR 0002 avec registre/passkeys/récupération locaux,
+audit signé et import dédupliqué. Le garde est exécuté par SSH sur l'hôte cible ;
+normal, secours et worker partagent le même répertoire, cible et UID opérationnel.
+Une session terminal réserve l'hôte. Une interruption incertaine reste bloquée ;
+une intervention de secours impose une réconciliation explicite et invalide les
+anciens plans. Aucune installation distante ni modification des pilotes n'est
+effectuée. La qualification physique et Cloudflare reste distincte de la preuve
+locale. Schéma 8, OpenAPI 0.7.0 ; voir [PHASE_6](docs/PHASE_6.md).
+
+
+### 9 septembre 2026 — phase 5, notifications et approbations natives (v0.13)
+
+L'utilisateur demande la phase 5 et fournit les configurations Firebase et son S24.
+La migration 007 conserve abonnements, file de livraison et preuves d'action.
+Le transport FCM HTTP v1 utilise des IDs opaques et un contexte minimal ; les
+états restent privés. Les réglages par appareil gèrent horaires IANA, regroupement,
+déduplication, révocation et escalades explicitement configurées. Les preuves sont
+liées au travail, à la session et à la révision puis consommées avec la décision.
+Android signe après biométrie forte ; Windows impose une nouvelle vérification
+utilisateur WebAuthn. Le cache chiffré opt-in ne contient que des résumés et sa
+vue dédiée interdit les mutations. Le watchdog est un processus indépendant.
+
+Le test du 8 septembre a réussi sur S24 : panne HTTP locale, FCM réel, ouverture
+de la bonne fiche et signature biométrique. Sa session initiale est une fixture
+WebAuthn, pas une passkey physique qualifiée sur le domaine final. Les fichiers
+Firebase sont ignorés par Git ; aucun pilote distant n'est modifié. Les limites
+sur l'attestation Android, la livraison FCM et le déploiement du watchdog sont
+décrites dans [PHASE_5](docs/PHASE_5.md). La phase suivante concerne terminal,
+fichiers et secrets ; la qualification Codex/Claude et le NO-GO restent ouverts.
+
+### 8 septembre 2026 — moteur Compose et déploiements locaux de phase 4 (v0.12)
+
+À la demande de l'utilisateur, la phase 4 prolonge la provenance GitHub par des plans
+persistants approuvés et un worker Docker Compose local distinct de l'API. La
+migration 006 conserve les travaux, étapes, preuves et versions saines. Les clients
+réutilisent Prisme UI pour préparer, approuver, suivre et restaurer une release.
+
+Le manifeste exécutable v1 utilise JSON strict ; le YAML de section 11 reste un
+exemple conceptuel. L'import Sounding Lines est conservé en mode legacy désactivé,
+sans inventer d'image ni revendiquer sa base de données. Les checks, le rollback et
+le premier blue-green sont exercés sur Docker/Caddy réels dans une stack jetable.
+Une interruption de mutation réserve la cible comme résultat incertain ; la reprise
+ne rejoue pas de commande sans preuve. Aucun service pilote distant n'est modifié.
+Le [guide phase 4](docs/PHASE_4.md) précise preuves, configuration et limites ; les
+qualifications du pilote, transport agent, sauvegardes et accès renforcé restent ouvertes.
+
+### 8 septembre 2026 — GitHub, builds et releases locaux de phase 3 (v0.11)
+
+L'utilisateur demande l'implémentation de la phase 3. Le monolithe Go reçoit une
+GitHub App à permissions de lecture et dépôts explicites, des webhooks HMAC avec
+déduplication, un polling avec reprise persistante, les APIs de code/builds/logs et
+la migration 005. Le client Flutter réutilise Prisme UI pour les parcours FR/EN.
+Le contrat Release v1 relie le run, sa tentative, son commit, son environnement et
+les images par digest à un artefact du workflow de publication configuré. Les
+builds sans provenance cohérente restent non liés ; aucune image n'est inventée.
+Les clés sont fournies par fichiers secrets en lecture seule, dans l'attente du
+coffre de phase 6. Les tests locaux distinguent les preuves sur fixtures de la
+qualification réelle encore nécessaire. Aucun dépôt pilote, workflow, tunnel,
+registre ni configuration de production n'est modifié.
+
+### 7 septembre 2026 — observabilité et incidents locaux de phase 2 (v0.10)
+
+Alloy collecte les mesures Linux et Docker sélectionnées, les probes et les logs ;
+VictoriaMetrics et Loki conservent la télémétrie avec rétention et limites explicites.
+PostgreSQL stocke les états de règles, incidents, événements et audit, sans logs bruts.
+Les règles confirment échec/récupération sur des échantillons originaux distincts,
+préservent les incidents pendant les coupures, gèrent maintenance/dépendances et
+rouvrent une récidive. Les actions humaines utilisent une révision et un audit atomique.
+
+La vue Diagnostic réutilise Prisme UI, avec fenêtres corrélées, recherche de logs,
+chronologie et états inconnus. Les cartes de tableaux mobiles ouvrent maintenant
+leur ligne quand une valeur est touchée. Les preuves incluent tests Go/PostgreSQL,
+tests Flutter 390/1 440 px et test natif Windows sur la vraie API TLS locale.
+
+Les cibles configurées sont locales et explicites ; aucun service pilote distant
+n'est arrêté ni modifié. Le transport collecteur distant, la qualification Android
+native de cette phase, les connecteurs Codex/Claude, les quotas disque globaux et
+les agrégats 12 mois restent ouverts. Voir [PHASE_2](docs/PHASE_2.md).
+
+### 7 septembre 2026 — implémentation locale de phase 1 (v0.9)
+
+Livraison : identité WebAuthn indépendante du secret de développement, parcours
+navigateur système et échange de session native à usage unique, appareils,
+récupération, préférences par appareil, renouvellement/révocation des certificats,
+capacités serveur, inventaire hôte/Docker/Compose et audit contextualisé.
+Le client réutilise Prisme UI pour Serveurs, fiches, accueil épinglé, appareils et
+audit. Les migrations 002/003 prolongent 001 ; schéma courant 3.
+
+Le VPS OVH est collecté via l'alias SSH existant : 13 conteneurs, cinq groupes
+Compose, sans commande de mutation ni installation sur le VPS. L'observation est
+conservée dans le backend local avec la source `ssh-readonly` et sa vraie date.
+Elle devient ancienne après 90 secondes ; sa présence ne signifie pas qu'un agent
+permanent est installé. Les modèles systemd du collecteur et du cœur agent sont
+livrés pour un futur déploiement ciblé.
+
+Le [guide phase 1](docs/PHASE_1.md) conserve les commandes, preuves et limites.
+Le mode `identity` exige une origine HTTPS et désactive les sessions de développement.
+Les tests de passkeys utilisent des authentifiants P-256 virtuels ; ils ne remplacent
+pas la qualification humaine Windows Hello/S24 et Cloudflare Access sur le domaine
+retenu. Aucune passkey personnelle, identité produit définitive, configuration de
+tunnel ou autorisation de production de la tour n'est créée implicitement.
+
 ### 6 septembre 2026 — consolidation de la spécification après phase 0 (v0.8)
 
 À la demande de l'utilisateur, les sections techniques sont synchronisées avec
@@ -4815,13 +5044,35 @@ reprise comprend maintenant `apps/prisme_client`, les modules Go, les contrats,
 la migration PostgreSQL et le Compose local, en plus du catalogue de la section 10.2.
 Le [guide phase 0](docs/PHASE_0.md) conserve les commandes et preuves acquises.
 
-La prochaine étape logicielle est la phase 1 : identité de production et passkeys,
+Les composants logiciels de phase 1 sont maintenant disponibles : passkeys,
 appareils/récupération, cycle de vie des certificats, capacités, inventaire et vues
-Serveurs. Le premier résultat attendu reste l'apparition du VPS et de ses projets
-en lecture seule, selon le périmètre autorisé d'une prochaine tâche. La persistance
-des préférences par appareil et la qualification Android font partie du raccordement
-client à poursuivre. La remise à niveau de la tour constitue un chantier distinct
-avant hébergement de production ; son diagnostic n'est pas à recommencer.
+Serveurs. Le VPS et ses projets réels sont importés en lecture seule. Les preuves
+natives et les limites de qualification sont dans [PHASE_1](docs/PHASE_1.md).
+La qualification du domaine, des passkeys physiques et du S24 reste à poursuivre ;
+la remise à niveau de la tour est un chantier distinct, sans nouveau diagnostic.
+Les composants locaux d'observabilité et d'incidents (phase 2) sont maintenant
+disponibles, avec exercice de panne locale et diagnostic Windows vérifiés ; voir
+[PHASE_2](docs/PHASE_2.md). Leur qualification opérationnelle sur les vrais pilotes
+reste distincte. La consultation GitHub, les builds et releases de phase 3 sont
+disponibles localement ; voir [PHASE_3](docs/PHASE_3.md). L'App et la publication
+d'images immuables des vrais pilotes restent à raccorder et qualifier avant de
+considérer leur critère de sortie opérationnel atteint. Cette consultation
+est prolongée par le moteur Docker Compose local de phase 4, maintenant livré ; voir
+[PHASE_4](docs/PHASE_4.md). La qualification réelle Sounding Lines et les prérequis
+de production restent ouverts. La phase 5 apporte maintenant FCM, les liens d’incident, les horaires silencieux,
+le cache chiffré, les approbations renforcées et le watchdog indépendant ; voir
+[PHASE_5](docs/PHASE_5.md). Le parcours S24 est vérifié sur une panne locale.
+La phase 6 est maintenant livrée localement : terminal, fichiers, coffre et secours
+indépendant ; voir [PHASE_6](docs/PHASE_6.md). La qualification du secours sur le VPS
+réel reste ouverte. La phase 7 est disponible localement : sauvegardes Restic,
+rétention et restaurations de test ; voir [PHASE_7](docs/PHASE_7.md). La restauration
+d’une vraie base pilote reste à qualifier. La phase 8 ajoute maintenant les plans
+Caddy/Cloudflare, le worker séparé et les modifications/restaurations vérifiées
+localement ; voir [PHASE_8](docs/PHASE_8.md). Les vrais pilotes et les permissions
+Cloudflare restent à qualifier. La phase 9 ajoute les politiques bornées, les
+runbooks versionnés, la planification, la maintenance et l’arrêt général ; voir
+[PHASE_9](docs/PHASE_9.md). Le critère logiciel est vérifié sur une panne Compose
+locale. La phase suivante concerne le durcissement et la qualification V1 (phase 10).
 
 Pour une prochaine tâche d'écran, selon le périmètre confié par l'utilisateur :
 
@@ -4848,8 +5099,8 @@ Priorités complémentaires à poursuivre à partir des décisions déjà docume
 - assembler en Flutter l'accueil « Mes machines / Mes workers » déjà validé en
   maquette sur Windows et Android ;
 - transformer les exemples d'urgence en règles testables avec délais validés ;
-- implémenter et qualifier en phase 6 le canal, l'identité, l'audit et la coordination
-  de secours retenus dans l'ADR 0002 ;
+- qualifier sur le VPS le canal, l'identité, l'audit et la coordination de secours
+  retenus dans l'ADR 0002 et implémentés localement en phase 6 ;
 - conserver le Wake-on-LAN comme évolution à qualifier à partir du diagnostic existant.
 
 Cette spécification et les guides locaux constituent désormais le point de reprise

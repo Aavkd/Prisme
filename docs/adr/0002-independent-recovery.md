@@ -2,6 +2,10 @@
 
 Date : 6 septembre 2026. Choix de conception pour la phase 6, non déployé.
 
+Suivi du 9 septembre 2026 : implémentation locale livrée, avec garde partagé sur
+l'hôte, identité indépendante et audit signé. Voir [PHASE_6](../PHASE_6.md).
+Le service et le canal Cloudflare ne sont pas installés sur le VPS réel.
+
 ## Décision
 
 Retenir une **passerelle de secours native systemd sur le VPS**, HTTPS/WebSocket,
