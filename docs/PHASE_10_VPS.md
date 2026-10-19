@@ -459,7 +459,7 @@ Vérifications finales (15:17 UTC) :
 s'est déclenchée puis résolue. **Non vérifié** : la vue Serveurs (VPS et conteneurs avec mesures
 fraîches) — elle attend l'enrôlement de l'agent, donc la première passkey d'Alexy (commande 6).
 
-## Étape 5 — Menaces SSH (relevés faits, décisions prises, préparation locale à faire)
+## Étape 5 — Menaces SSH (en service ; observation 24 h en cours)
 
 ### Relevés en lecture seule (19/10/2026, 15:55 → 16:20 UTC)
 
@@ -631,3 +631,48 @@ depuis `/opt/projects/prisme`. Adresses masquées ici, données en clair à Alex
 
 Retour arrière : `sudo systemctl disable --now prisme-ssh-metrics.timer` et
 `sudo rm /var/lib/prisme-metrics/ssh.prom` (les règles passent à « inconnu »).
+
+### Exécution (19/10/2026, 20:57 → 21:20 UTC, accord d'Alexy : commandes 0 à 6)
+
+Scripts : `D:\tools\vps-scripts\etape5-installation.sh` (0 à 4), `etape5-verif.sh` (5),
+`etape5-exercice.sh` (6), `etape5-observation.sh` (7).
+
+| # | Résultat |
+|---|---|
+| 0 | Avant : 42 conteneurs actifs, RAM disponible ≈ 5,2 Go, swap 17 Mo. |
+| 1 | `git pull` → `e4ec993`. |
+| 2 | `/etc/prisme/ssh-known-ips` : 2 adresses (tour, ligne fixe), `root:prisme-observation` `0640`. |
+| 3 | `install-host.sh` : `ssh_metrics.py` et `prisme-ssh-metrics.{service,timer}` installés, minuteur actif ; première exécution réussie (code 0) ; les deux autres collecteurs réinstallés à l'identique. |
+| 4 | API recompilée puis recréée (`migrate` terminé en 0, API `healthy`). RAM disponible minimale **4 750 Mo**, swap max 17 Mo ; après : 5 201 Mo, 42 conteneurs, aucun nom ni image changé hors Prisme. |
+| 5 | Voir ci-dessous. |
+| 6 | Exercice : voir ci-dessous. |
+
+Vérifications (commande 5, 20:58 UTC) :
+
+- Collecteur SSH toutes les 30 s, sans erreur ; `ssh.prom` : 6 échecs sur 10 min, 4 connexions
+  dont 0 inconnue, fail2ban actif, **2 adresses bannies** (fail2ban bloque de nouveau les
+  récidivistes), 10 détections de fail2ban sur 10 min, aveugle 0.
+- VictoriaMetrics : les 9 mesures, **une série chacune** (portée `vps-host`).
+- **67 règles sur 67 saines**, 0 incident ouvert.
+
+Exercice (commande 6) — drapeaux créés à 20:58:44, supprimés à 21:14:05 :
+
+| Règle | Ouverte | Délai | Résolue | Délai après suppression |
+|---|---|---|---|---|
+| `VPS-SSH-UNKNOWN-LOGIN` | 20:59:17 | 33 s | 21:15:32 | 1 min 27 s |
+| `VPS-FAIL2BAN-DOWN` | 20:59:57 | 1 min 13 s | 21:15:32 | 1 min 27 s |
+| `VPS-SSH-FAILURES` | 21:09:02 | 10 min 18 s | 21:19:32 | 5 min 27 s |
+| `VPS-FAIL2BAN-BLIND` | 21:14:02 | 15 min 18 s | 21:19:32 | 5 min 27 s |
+
+Événements `detected` puis `resolved` pour chacune ; `/etc/prisme` ne contient plus que
+`ssh-known-ips` ; ensuite 67 règles saines, 0 incident ouvert, RAM disponible 5 165 Mo, swap
+17 Mo. Aucune notification envoyée (pas encore configurées : étape 6).
+
+Premier passage de l'observation (21:20 UTC) : 0 incident SSH depuis l'exercice, aucune
+connexion inconnue, aucune erreur de collecte, maximum de 7 échecs sur 10 min hors exercice ;
+fail2ban : 3 bans au total depuis le redémarrage.
+
+**Critère de l'étape 5** : incidents créés et résolus sur métriques synthétiques — **atteint**.
+**Non vérifié** : 24 h d'observation sans faux positif (relancer `etape5-observation.sh` après le
+20/10 à 21:20 UTC). Les deux règles critiques ne deviendront `urgent` qu'avec la configuration
+des notifications (étape 6).
