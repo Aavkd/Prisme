@@ -676,3 +676,57 @@ fail2ban : 3 bans au total depuis le redémarrage.
 **Non vérifié** : 24 h d'observation sans faux positif (relancer `etape5-observation.sh` après le
 20/10 à 21:20 UTC). Les deux règles critiques ne deviendront `urgent` qu'avec la configuration
 des notifications (étape 6).
+
+## Étape 6 — Alertes S24 et veilleurs (préparée en local, en attente d'Alexy)
+
+### Constats (lecture du code, 19/10/2026)
+
+- L'API lit `PRISME_NOTIFICATION_CONFIG` et **refuse de démarrer** si la clé FCM manque :
+  les notifications sont donc un complément de Compose à part, activé seulement quand
+  `secrets/fcm-api.json` existe. Une règle absente de la configuration n'envoie **rien**.
+- Horaires silencieux : réglés **par appareil** dans l'application (écran Notifications), défaut
+  22:00–07:00. Une alerte ne les traverse que si sa règle est `urgent` **et** critique.
+- L'API joint `fcm.googleapis.com` par le réseau `edge` (non interne, vérifié sur le VPS) ;
+  `control` reste sans sortie.
+- Le veilleur garde sa **propre liste de jetons** (le control plane peut être en panne) : jetons
+  lus dans `notification_devices` (appareils actifs, non révoqués), jamais affichés. Son état ne
+  contient que des empreintes de jetons.
+- Envoi FCM : permission `cloudmessaging.messages.create` (rôle prédéfini « Firebase Cloud
+  Messaging API Admin », qui ajoute seulement les abonnements aux sujets et les statistiques
+  de livraison ; un rôle personnalisé réduit à cette permission est proposé en premier).
+- La session de l'agent sur la tour **n'est pas administrateur** : la tâche planifiée (compte
+  SERVICE LOCAL) est installée par Alexy dans un PowerShell administrateur, sur les deux PC.
+
+### Fait (local, sans effet sur le VPS, Firebase ou les PC)
+
+- `deploy/production/notifications.json` : les **67 règles** notifient, `group_seconds` 60,
+  aucune relance ; **urgentes : `VPS-SSH-UNKNOWN-LOGIN` et `VPS-FAIL2BAN-DOWN`** (décision du
+  19/10). Test Go : chaque règle d'`observability.json` a sa ligne, les urgentes sont
+  critiques et sont exactement ces deux-là, aucune relance sans décision.
+- `deploy/production/compose.notifications.yml` : variable, fichier monté et secret
+  `firebase_service_account` pour l'API **seulement** (`migrate` ne reçoit pas la clé) ; fusion
+  vérifiée avec `docker compose config` ; ajouté à la CI.
+- `deploy/watchdog/windows/install-watchdog.ps1` (PowerShell 5.1, ASCII) : installation,
+  `-Status`, `-RefreshTokens`, `-Uninstall`, `-DryRun`. Dossier à héritage coupé (SYSTEM,
+  Administrateurs, SERVICE LOCAL en lecture, écriture dans `state` seulement), tâche
+  `\Prisme\Prisme watchdog` sous SERVICE LOCAL (démarrage + toutes les 5 min, une instance,
+  relance 1 min, durée illimitée), `urgent: true`, seuil 3, horaires 22 h–7 h Paris. Refuse une
+  clé `firebase-adminsdk` et un libellé d'instance hors `^[a-z0-9][a-z0-9-]{0,15}$` (y compris
+  les majuscules, que `ValidatePattern` laissait passer : défaut trouvé en essai). JSON écrit
+  **sans BOM** (Go refuse un BOM : vérifié avec le vrai programme).
+- Essais sur la tour (non administrateur, rien installé) : syntaxe PowerShell sans erreur ;
+  essai à blanc complet ; refus de la clé `firebase-adminsdk`, des majuscules et du statut sans
+  droits ; le vrai `watchdog.exe` (recompilé, SHA-256 `29c8a4ad…aeb`) a lu la configuration
+  produite et, avec une clé RSA jetable générée localement, tourné 45 s : 2 contrôles réussis de
+  `https://prisme.mantara.fr/readyz`, aucun envoi, état écrit et relu comme par `-Status`.
+  Fichiers d'essai et clé jetable supprimés.
+- Procédure pas à pas pour Alexy : [ETAPE_6_PROCEDURE.md](ETAPE_6_PROCEDURE.md) (passkey,
+  Firebase, S24, clé de l'API, veilleurs, essais, révocation de l'ancienne clé complète,
+  limites) ; mode d'emploi du veilleur : `deploy/watchdog/windows/LISEZMOI.md`.
+
+### Reste (dans l'ordre)
+
+1. Alexy : première passkey (A), comptes Firebase limités et 3 clés (B), APK et S24 (C).
+2. Agent, après « oui » : clé de l'API sur le VPS et recréation de l'API (D).
+3. Alexy : veilleurs de la tour (E) et du portable (F).
+4. Ensemble : essais du critère (G), puis révocation de l'ancienne clé complète (H).
