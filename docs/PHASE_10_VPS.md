@@ -216,6 +216,43 @@ Toutes depuis la tour. `P` désigne `docker compose --env-file deploy/production
 Retour arrière si besoin : `sudo $P down` (conserve les volumes). Supprimer `/opt/projects/prisme`
 ou la clé de déploiement seulement avec l'accord d'Alexy.
 
+### Exécution (19/10/2026, 00:25 → 00:39 UTC, accord d'Alexy)
+
+| # | Résultat |
+|---|---|
+| 0 | Avant : RAM disponible 5 292 Mo, swap 1 014 Mo, `/` 24 Go utilisés (48 libres), **36** conteneurs actifs (35 + `thielen-maquettes-web-1`, nouveau site déployé en parallèle par ailleurs, créé à 00:11). |
+| 1 | `~/.ssh/deploy_prisme` (ed25519, `0600`) et alias `github-prisme` ajouté en fin de `~/.ssh/config` ; copie de sauvegarde `~/.ssh/config.bak-20261019-0025xx` faite avant. |
+| 2 | Clé de déploiement GitHub n° 166885280 « ovh-mantara (lecture seule) », `read-only`. |
+| 3 | `/opt/projects/prisme` : clone partiel (`deploy`, `cmd`, `internal` + fichiers racine), `8c42c65`, 2,4 Mo, arbre Git propre. |
+| 4 | `init-secrets.sh` réussi en ≈ 1 min : `secrets/` `root:10001`, dossiers `0750`, fichiers `0640` ; `ubuntu` ne peut pas lister le dossier ; rien affiché. RAM disponible minimale pendant la compilation : **4 752 Mo** ; swap max 1 014 Mo. |
+| 5 | `up -d --build --wait` réussi : postgres, victoriametrics, loki, alloy, api `healthy`/démarrés, `migrate` terminé en **0**. RAM disponible minimale : 5 136 Mo ; swap 1 027 Mo. |
+| 6 | Voir ci-dessous. |
+
+Vérifications (étape 6) :
+
+- **Aucun port publié** par Prisme (les `5432/tcp`, `3100/tcp`, `8428/tcp` affichés sont seulement
+  exposés sur le réseau interne). La seule écoute hôte sur les ports testés est
+  `127.0.0.1:5432`, qui appartient à `arpent-postgres-1` (préexistant).
+- API : `Prisme API listening with TLS (identity)` ; réseaux `edge` (alias `prisme-api`) et
+  `prisme_control`. Rien n'est exposé : DNS et Caddy non touchés.
+- Mémoire réelle de Prisme ≈ 200 Mo (API 4, Alloy 72, Postgres 59, Loki 34, VictoriaMetrics 33)
+  pour 1,8 Go de limites.
+- Alloy : une seule erreur, bénigne (`/run/udev/data` absent, propriétés udev des disques) ;
+  **cAdvisor lit bien les conteneurs via containerd** avec les groupes 986 et 0.
+- VictoriaMetrics : mesures de l'hôte (`/` à 35,6 %), d'Alloy et du conteneur API (≈ 5 Mo) ;
+  Loki : logs de l'API reçus (requêtes par un conteneur `curl` jetable sur `prisme_control`).
+- **Autres conteneurs** : mêmes 36 noms et images qu'avant, tous `Up`. `thielen-maquettes-web-1`
+  a redémarré à **00:25:12** par son propre projet (dossier modifié à 00:25), avant la première
+  commande modifiante de cette étape (relevé 0 à 00:25:04) : activité extérieure, sans lien.
+- Après : RAM disponible **5 078 Mo** (−214 Mo), swap **1 026 Mo** (+12 Mo, stable), `/` 26 Go
+  utilisés (+2 Go d'images et de cache de compilation), 41 conteneurs actifs.
+- Incident de méthode, sans effet sur le VPS : mon enveloppe de relevé mémoire de l'étape 4 a vu
+  la fin de son script lue par `docker compose run` ; la boucle de relevé est restée active
+  ≈ 10 min, puis a été arrêtée et son fichier `/tmp` supprimé. Corrigé (entrée `/dev/null`).
+
+**Critère de l'étape 2 atteint** : conteneurs sains, aucun port publié, RAM de Prisme sous 2 Go,
+autres conteneurs intacts.
+
 ### Toujours à faire par Alexy
 
 - Supprimer le clone fait par erreur : `Remove-Item -Recurse -Force D:\Prisme`.
