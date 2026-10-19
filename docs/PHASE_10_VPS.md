@@ -288,6 +288,61 @@ Vérifié depuis le VPS : `prisme.mantara.fr` répond encore `64.29.17.65` et `2
 générique `*.mantara.fr` (un sous-domaine inexistant donne les mêmes adresses) : l'enregistrement
 explicite **A `prisme` → 51.255.163.21, nuage gris** n'existe pas encore. Bloc Caddy **non activé**.
 
+### Exécution (19/10/2026, accord d'Alexy : A tout de suite, B dès que le DNS résout)
+
+**A — mise à jour de la pile (10:54 UTC)** : `git pull` (`7f203cc`) puis `up -d --build --wait`.
+Seuls `migrate` (terminé en 0) et `api` recréés ; API `healthy`, `PRISME_TRUSTED_PROXY_CIDR=172.22.0.0/16`
+chargé. RAM disponible minimale pendant la compilation 4 457 Mo, swap 1 028 Mo ; 36 autres
+conteneurs identiques, aucun redémarré.
+
+**DNS** : surveillé chaque minute depuis le VPS ; enregistrement `prisme` visible à **13:17:02 UTC**
+sur 1.1.1.1 et 8.8.8.8, puis revérifié sur les deux serveurs Cloudflare qui font autorité
+(`51.255.163.21`, aucun AAAA).
+
+**B — Caddy (13:17:46 UTC)** :
+
+- Référence avant : codes HTTP des 27 adresses servies par le Caddy mutualisé (joint en local).
+- Sauvegarde `/opt/projects/edge/Caddyfile.bak-20261019-131746` (512 lignes) ; bloc ajouté en
+  écrivant **en place** (539 lignes) ; certificat public de la CA du VPS (empreinte SHA-256
+  `629F3A2C…5F99`) ; `caddy validate` → `Valid configuration` ; `caddy reload` OK. Le bloc avait
+  aussi été validé à l'avance en local avec le Caddyfile du VPS.
+- Certificat Let's Encrypt obtenu par HTTP-01 en ≈ 3 s : émetteur `Let's Encrypt YE2`, valable
+  jusqu'au **17/01/2027**, SAN `prisme.mantara.fr`.
+
+Vérifications depuis la tour, à travers Internet :
+
+| Requête | Résultat |
+|---|---|
+| `/readyz`, `/healthz` | 200 (`{"status":"ready"}`) |
+| `/auth` (page de connexion passkey) | 200 |
+| `/v1/me`, `/v1/servers`, `/v1/incidents`, `/v1/observability`, `/v1/devices` en anonyme | **401**, aucune donnée |
+| `http://` | 308 vers `https://` |
+| En-têtes | `Strict-Transport-Security: max-age=31536000; includeSubDomains`, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` ; pas d'en-tête `Server` |
+
+- Les 27 autres adresses répondent **exactement** comme avant le rechargement ; nouvelle adresse
+  `prisme.mantara.fr/` → 404 (l'API ne sert rien à la racine).
+- Audit : les rejets portent les **vraies adresses** des visiteurs (dont l'IP publique de la tour),
+  jamais celle de Caddy (`172.22.0.4`). Quelques minutes après la publication du certificat, deux
+  robots avaient déjà sondé l'API (33 et 13 requêtes rejetées) : le correctif de limitation de
+  débit était nécessaire.
+- RAM disponible après : 4 967 Mo, swap 1 026 Mo.
+
+### Reste pour clore l'étape 3 (actions d'Alexy)
+
+1. Lire le secret d'initialisation **soi-même** sur le VPS, sans le copier ailleurs :
+   `ssh ovh-mantara 'sudo cat /opt/projects/prisme/secrets/identity-secret'`.
+2. Lancer le client sur le portable (Flutter 3.38.5), depuis `apps/prisme_client` :
+   `flutter run -d windows --dart-define=PRISME_IDENTITY=true --dart-define=PRISME_API_URL=https://prisme.mantara.fr`
+   (aucune CA à fournir : le certificat Let's Encrypt est reconnu par le système). Bouton passkey
+   → page `/auth` dans le navigateur → « Créer ou récupérer » → secret d'initialisation → passkey.
+   Conserver hors de l'appareil les codes de secours proposés.
+3. S24 : ajouter l'appareil depuis la session du portable (ticket d'ajout), avec un APK construit
+   pour la même URL. Le nouvel APK (titre du watchdog) se construit sur le portable, la tour n'a pas
+   le SDK Android.
+
+Tant que ces connexions ne sont pas faites, le critère « connexion passkey OK depuis le portable et
+le S24 » reste **non vérifié**.
+
 ### Toujours à faire par Alexy
 
 - Supprimer le clone fait par erreur : `Remove-Item -Recurse -Force D:\Prisme`.
