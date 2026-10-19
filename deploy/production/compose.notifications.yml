@@ -1,0 +1,24 @@
+# ──────────────────────────────────────────────────────────────────
+# Notifications FCM du control plane (étape 6), en complément de compose.yml.
+#
+# À ajouter à `P` seulement quand ../../secrets/fcm-api.json existe
+# (root:10001, 0640) : avec une configuration de notifications mais sans clé,
+# l'API refuse de démarrer. La clé est celle d'un compte de service limité à
+# l'envoi FCM ; elle n'entre ni dans le dépôt ni dans une image.
+#
+#   P="docker compose --env-file deploy/production/ovh-mantara.env -f deploy/production/compose.yml -f deploy/production/compose.notifications.yml"
+#
+# L'API joint fcm.googleapis.com par le réseau edge (le réseau control n'a
+# pas de sortie). Règles notifiées et règles urgentes : notifications.json.
+# ──────────────────────────────────────────────────────────────────
+services:
+  api:
+    environment:
+      PRISME_NOTIFICATION_CONFIG: /etc/prisme/notifications.json
+    volumes:
+      - ./notifications.json:/etc/prisme/notifications.json:ro
+    secrets: [firebase_service_account]
+
+secrets:
+  firebase_service_account:
+    file: ../../secrets/fcm-api.json

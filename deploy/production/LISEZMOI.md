@@ -12,6 +12,7 @@ décisions et preuves : [docs/PHASE_10_VPS.md](../../docs/PHASE_10_VPS.md).
 | `init-secrets.sh` | Crée **une fois** `/opt/projects/prisme/secrets` (`root:10001`, `0640`) : mots de passe, CA privée, certificat de l'API. Refuse de remplacer. |
 | `renew-server-cert.sh` | Réémet le certificat interne de l'API depuis la même CA et redémarre l'API. |
 | `edge-bloc.caddy` | Bloc à ajouter au Caddy mutualisé, avec le certificat **public** de la CA (`pki ca-base64`). |
+| `compose.notifications.yml`, `notifications.json` | Notifications FCM de l'API (étape 6) : complément de `compose.yml`, à n'utiliser qu'avec `secrets/fcm-api.json` en place ; règles notifiées et règles urgentes. |
 
 Toutes les commandes se lancent depuis `/opt/projects/prisme`, avec `sudo` : le
 dossier `secrets/` est fermé à l'utilisateur `ubuntu`. Abréviation utilisée ici :
@@ -77,6 +78,20 @@ L'agent tourne en conteneur (profil `agent`), sans socket Docker : il lit l'inve
    `sudo install -d -m 0750 -o root -g 10001 secrets/agent && sudo sh -c 'umask 027; cat > secrets/agent/token' && sudo chgrp 10001 secrets/agent/token`
 3. `sudo $P --profile agent up -d --build --wait agent`, puis supprimer `secrets/agent/token`
    une fois l'agent visible (l'identité reste dans le volume `agent_identity`).
+
+## Notifications (étape 6)
+
+- Clé d'un compte de service **limité à l'envoi FCM** dans `secrets/fcm-api.json`
+  (`root:10001`, `0640`), écrite sans être affichée (procédure :
+  [docs/ETAPE_6_PROCEDURE.md](../../docs/ETAPE_6_PROCEDURE.md), partie D).
+- Une fois la clé en place, `P` inclut **toujours** le second fichier (un `up` sans lui
+  recréerait l'API sans notifications ; avec lui mais sans clé, l'API refuse de démarrer) :
+  `P="docker compose --env-file deploy/production/ovh-mantara.env -f deploy/production/compose.yml -f deploy/production/compose.notifications.yml"`.
+- `notifications.json` : les 67 règles notifient ; seules `VPS-SSH-UNKNOWN-LOGIN` et
+  `VPS-FAIL2BAN-DOWN` sont `urgent` (traversent les horaires silencieux réglés sur chaque
+  appareil) ; aucune relance. Un test Go vérifie qu'aucune règle n'est oubliée. Toute nouvelle
+  règle d'`observability.json` y reçoit sa ligne.
+- L'API joint `fcm.googleapis.com` par le réseau `edge` (le réseau `control` n'a pas de sortie).
 
 ## Mise à jour
 

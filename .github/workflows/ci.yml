@@ -42,6 +42,7 @@ jobs:
       - run: docker compose -f deploy/compose.dev.yml -f deploy/compose.notifications.yml config --quiet
       - run: docker run --rm -v "$PWD/deploy/observability/config.alloy:/etc/alloy/config.alloy:ro" grafana/alloy:v1.19.2 validate /etc/alloy/config.alloy
       - run: docker compose --env-file deploy/production/ovh-mantara.env -f deploy/production/compose.yml config --quiet
+      - run: docker compose --env-file deploy/production/ovh-mantara.env -f deploy/production/compose.yml -f deploy/production/compose.notifications.yml config --quiet
       - run: docker run --rm -v "$PWD/deploy/production/config.alloy:/etc/alloy/config.alloy:ro" grafana/alloy:v1.19.2 validate /etc/alloy/config.alloy
       - run: sh -n deploy/production/init-secrets.sh && sh -n deploy/production/renew-server-cert.sh && sh -n deploy/production/install-host.sh
       - run: python3 -m unittest discover -s deploy/production/host -p 'test_*.py'
