@@ -67,6 +67,19 @@ func TestStorageFailureAndMissingData(t *testing.T) {
 		t.Fatal("cleartext allowed outside development")
 	}
 }
+func TestInternalSourceAllowsCleartextOnlyToServiceNames(t *testing.T) {
+	if _, err := NewInternalSource("http://victoriametrics:8428", "http://loki:3100/"); err != nil {
+		t.Fatal("internal Compose services refused", err)
+	}
+	if _, err := NewInternalSource("https://metrics.example.com", "http://loki:3100"); err != nil {
+		t.Fatal("HTTPS store refused", err)
+	}
+	for _, v := range []string{"http://127.0.0.1:8428", "http://10.0.0.5:8428", "http://[::1]:8428", "http://metrics.example.com:8428", "http://Loki:3100", "http://user:pass@loki:3100", "http://loki:3100/api", "http://loki:3100?x=1", "ftp://loki:3100", "http://"} {
+		if _, err := NewInternalSource("http://victoriametrics:8428", v); err == nil {
+			t.Fatalf("unsafe telemetry URL %q accepted", v)
+		}
+	}
+}
 func TestRedaction(t *testing.T) {
 	for _, v := range []string{`{"api_key":"sensitive"}`, `cookie=sensitive`, "Bearer sensitive", `https://user:sensitive@example.org`, "-----BEGIN PRIVATE KEY-----\nsensitive\n-----END PRIVATE KEY-----"} {
 		if strings.Contains(Redact(v), "sensitive") {

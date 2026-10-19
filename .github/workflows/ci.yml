@@ -41,6 +41,9 @@ jobs:
       - run: docker compose -f deploy/compose.dev.yml -f deploy/compose.github.yml config --quiet
       - run: docker compose -f deploy/compose.dev.yml -f deploy/compose.notifications.yml config --quiet
       - run: docker run --rm -v "$PWD/deploy/observability/config.alloy:/etc/alloy/config.alloy:ro" grafana/alloy:v1.19.2 validate /etc/alloy/config.alloy
+      - run: docker compose --env-file deploy/production/ovh-mantara.env -f deploy/production/compose.yml config --quiet
+      - run: docker run --rm -v "$PWD/deploy/production/config.alloy:/etc/alloy/config.alloy:ro" grafana/alloy:v1.19.2 validate /etc/alloy/config.alloy
+      - run: sh -n deploy/production/init-secrets.sh && sh -n deploy/production/renew-server-cert.sh
       - run: docker build --target api -f deploy/Dockerfile -t prisme-ci-api .
 
   edge:

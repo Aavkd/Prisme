@@ -1,0 +1,26 @@
+# ── Prisme (supervision, alertes) ─────────────────────────────────
+# Dépôt Aavkd/Prisme, /opt/projects/prisme. Enregistrement A `prisme` en DNS only
+# (nuage gris) vers ce VPS : Let's Encrypt en ACME HTTP-01. Pas de Cloudflare Access.
+# L'API ne parle que TLS avec la CA privée de Prisme : ce proxy ne fait confiance
+# qu'à elle (certificat PUBLIC de la CA en DER base64, sortie de `pki ca-base64`).
+# Ne jamais activer ce bloc avant que `dig` sur 1.1.1.1 ET 8.8.8.8 donne le VPS.
+prisme.mantara.fr {
+	import base_headers
+	import hsts
+
+	reverse_proxy https://prisme-api:8443 {
+		transport http {
+			tls_server_name prisme-api
+			tls_trust_pool inline {
+				trust_der __PRISME_CA_DER_BASE64__
+			}
+		}
+		lb_try_duration 30s
+		lb_try_interval 250ms
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

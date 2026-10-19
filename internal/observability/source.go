@@ -45,6 +45,21 @@ func NewSource(metrics, logs string, allowLocalHTTP bool) (*Source, error) {
 	return &Source{MetricsURL: strings.TrimRight(metrics, "/"), LogsURL: strings.TrimRight(logs, "/"), Client: &http.Client{Timeout: 3 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 
+// A single-label Docker service name: never an IP address or a dotted DNS name.
+var internalService = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
+
+// NewInternalSource allows cleartext HTTP outside development only towards
+// Compose service names such as victoriametrics:8428, which resolve on the
+// stack's internal network alone. HTTPS URLs keep the usual checks.
+func NewInternalSource(metrics, logs string) (*Source, error) {
+	for _, v := range []string{metrics, logs} {
+		if u, err := url.Parse(v); err == nil && u.Scheme == "http" && !internalService.MatchString(u.Hostname()) {
+			return nil, errors.New("invalid telemetry URL (cleartext only to an internal service name)")
+		}
+	}
+	return NewSource(metrics, logs, true)
+}
+
 type resultEnvelope struct {
 	Status string `json:"status"`
 	Data   struct {

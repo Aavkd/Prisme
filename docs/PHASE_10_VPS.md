@@ -152,17 +152,70 @@ Résultats réels sur la tour, le 18/10/2026 au soir :
   libres ; aucune erreur disque constatée. RAM de la tour : ≈ 1,8 Go libres sur 16 Go pendant les
   essais, dont ≈ 6,6 Go retenus par la VM de Docker Desktop (`vmmem`).
 
-## En attente d'accord
+### Décisions d'Alexy (19/10/2026)
 
-Aucune action sur le VPS, le DNS ou Firebase n'a été faite (seules des lectures : `free`, `df`,
-`docker ps -q`, `docker info`, droits des sockets). Décisions demandées à Alexy avant l'étape 2 :
+- Point 2 : **option (a)**, HTTP seulement vers un nom de service Docker interne.
+- Point 7 : **groupe root accordé à Alloy** pour le socket containerd.
 
-1. **Observabilité interne en HTTP** (point 2) : option (a) recommandée — autoriser HTTP
-   uniquement vers un nom de service Docker sans point, sur le réseau interne, via une variable
-   explicite ; ou option (b) TLS devant VictoriaMetrics et Loki.
-2. **Groupe root pour Alloy** (point 7) : nécessaire pour lire le socket containerd du VPS et donc
-   les métriques des 35 conteneurs ; sinon, pas de mesures par conteneur.
-3. **Suppression du clone `D:\Prisme`** fait par erreur (à faire par Alexy :
-   `Remove-Item -Recurse -Force D:\Prisme`).
+## Étape 2 — Installation sur le VPS (préparée en local, en attente d'accord)
 
-L'étape 2 sera ensuite proposée ici avec ses commandes exactes avant toute exécution.
+### Fait (local, sans effet sur le VPS)
+
+- **Option (a)** : `observability.NewInternalSource` n'accepte le HTTP qu'avec
+  `PRISME_TELEMETRY_INTERNAL_HTTP=1` et vers un nom de service sans point
+  (`^[a-z][a-z0-9-]{0,62}$`) ; IP, noms DNS, identifiants, chemins et requêtes restent refusés
+  (test avec 10 adresses dangereuses). HTTPS inchangé.
+- **PKI de production** : `cmd/pki` (`init`, `renew-server`, `ca-base64`) et image `pki` du
+  Dockerfile. CA dédiée « Prisme control plane CA » de 5 ans, certificat API de 397 jours pour
+  `prisme-api` et `localhost`, réémission sans toucher la CA ni les agents, refus de remplacer une
+  PKI existante. Seul le certificat **public** de la CA peut être affiché (pour Caddy).
+- **`deploy/production/`** : `compose.yml` (projet `prisme`, aucun port publié, réseau interne
+  `control`, API seule sur `edge` avec l'alias `prisme-api`, journaux Docker bornés à 3 × 10 Mo,
+  `restart: unless-stopped`), `ovh-mantara.env` (non secret), `config.alloy` (hôte, Alloy,
+  conteneurs Prisme ; pas encore les 35 conteneurs ni les sites, prévus à l'étape 4),
+  `observability.json` (3 portées, aucune règle), `init-secrets.sh`, `renew-server-cert.sh`,
+  `edge-bloc.caddy`, `LISEZMOI.md`. La CI valide désormais ce compose, cette config Alloy et les
+  deux scripts.
+- **Simulation complète sur Docker Desktop** (secrets jetables, réseau `edge` local, Caddy 2.11.4
+  comme sur le VPS), qui a trouvé et fait corriger trois défauts :
+  - l'outil `pki` montait son dossier sur `/pki`, qui est le programme lui-même → `/secrets` ;
+  - **course au démarrage de PostgreSQL** : pendant l'initialisation, un serveur temporaire
+    n'écoute que sur le socket local, `pg_isready` le déclarait prêt et `migrate` échouait en TCP
+    une seconde trop tôt. Santé testée en TCP (`-h 127.0.0.1`), en production et en dev ;
+  - les fichiers écrits par l'outil `pki` sont en `0600` root : l'API ne les lit qu'après l'étape
+    de droits `root:10001` / `0640` du script (reproduite).
+- Résultats de la simulation : 5 services sains, `migrate` terminé en 0, aucun port publié ; à
+  travers Caddy, `/readyz` → 200 `{"status":"ready"}`, `/auth` → 200, `/v1/me`, `/v1/servers`,
+  `/v1/incidents` → 401 en anonyme ; avec une autre CA de confiance, Caddy répond **502**
+  (« certificate signed by unknown authority ») ; métriques hôte, Alloy et conteneur API
+  présentes dans VictoriaMetrics, logs de l'API dans Loki ; mémoire réelle ≈ 340 Mo
+  (API 7, Postgres 40, VictoriaMetrics 83, Loki 68, Alloy 142). Simulation démontée ensuite.
+
+### À décider avant l'étape 3 (exposition)
+
+**Limitation de débit derrière Caddy** : l'API compte les requêtes anonymes par adresse IP
+source (120/min). Derrière Caddy, tous les anonymes ont l'adresse de Caddy : un robot à plus de
+120 requêtes/min bloquerait la connexion par passkey d'Alexy (les sessions ouvertes et `/readyz`
+restent épargnés). Correctif proposé : ne croire l'en-tête `X-Forwarded-For` que si la connexion
+vient du réseau `edge` (Caddy remplace cet en-tête par l'IP réelle du client). À valider.
+
+### Commandes proposées (aucune n'est lancée sans le « oui » d'Alexy)
+
+Toutes depuis la tour. `P` désigne `docker compose --env-file deploy/production/ovh-mantara.env -f deploy/production/compose.yml`.
+
+| # | Commande | Effet |
+|---|---|---|
+| 0 | `ssh ovh-mantara 'free -m; df -h /; docker ps --format "{{.Names}} {{.Status}}"'` | Relevé avant (lecture seule). |
+| 1 | `ssh ovh-mantara 'ssh-keygen -q -t ed25519 -N "" -C prisme-deploy@ovh-mantara -f ~/.ssh/deploy_prisme && printf "\nHost github-prisme\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/deploy_prisme\n  IdentitiesOnly yes\n" >> ~/.ssh/config'` | Nouvelle clé dédiée sur le VPS, bloc ajouté à la fin de `~/.ssh/config` (rien d'autre modifié). |
+| 2 | `ssh ovh-mantara 'cat ~/.ssh/deploy_prisme.pub' > D:\tools\tmp\deploy_prisme.pub` puis `gh repo deploy-key add D:\tools\tmp\deploy_prisme.pub --repo Aavkd/Prisme --title "ovh-mantara (lecture seule)"` | Clé **publique** déclarée sur GitHub en lecture seule (action externe visible). |
+| 3 | `ssh ovh-mantara 'git clone -q --filter=blob:none --sparse git@github-prisme:Aavkd/Prisme.git /opt/projects/prisme && cd /opt/projects/prisme && git sparse-checkout set deploy cmd internal'` | Crée `/opt/projects/prisme` (clone partiel). |
+| 4 | `ssh ovh-mantara 'cd /opt/projects/prisme && sudo sh deploy/production/init-secrets.sh'` | Crée `secrets/` (`root:10001`, `0640`) ; compile l'outil `pki` (≈ 2 min, ≈ 1 Go de RAM pendant la compilation, image Go téléchargée). Rien n'est affiché. |
+| 5 | `ssh ovh-mantara 'cd /opt/projects/prisme && sudo $P up -d --build --wait'` | Télécharge Postgres, VictoriaMetrics, Loki, Alloy (≈ 1,5 Go de disque) et démarre la pile `prisme`. Aucun port publié, DNS et Caddy **non touchés** : rien n'est exposé. |
+| 6 | Vérifications en lecture seule : état et ports des conteneurs `prisme`, `docker stats`, `free -m`, liste des 35 autres conteneurs comparée au relevé 0, requête VictoriaMetrics/Loki par un conteneur `curl` jetable sur `prisme_control`. | Critère de l'étape 2. |
+
+Retour arrière si besoin : `sudo $P down` (conserve les volumes). Supprimer `/opt/projects/prisme`
+ou la clé de déploiement seulement avec l'accord d'Alexy.
+
+### Toujours à faire par Alexy
+
+- Supprimer le clone fait par erreur : `Remove-Item -Recurse -Force D:\Prisme`.

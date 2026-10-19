@@ -162,7 +162,12 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		source, err := observability.NewSource(os.Getenv("PRISME_METRICS_URL"), os.Getenv("PRISME_LOGS_URL"), mode == "development")
+		metrics, logs := os.Getenv("PRISME_METRICS_URL"), os.Getenv("PRISME_LOGS_URL")
+		source, err := observability.NewSource(metrics, logs, mode == "development")
+		// Explicit opt-in: stores reached by Compose service name on an internal network.
+		if mode != "development" && os.Getenv("PRISME_TELEMETRY_INTERNAL_HTTP") == "1" {
+			source, err = observability.NewInternalSource(metrics, logs)
+		}
 		if err != nil {
 			return err
 		}

@@ -1,0 +1,8 @@
+{
+  "scopes": [
+    {"id":"vps-host","server":"ovh-mantara","project":"infrastructure","environment":"production","service":"host"},
+    {"id":"vps-alloy","server":"ovh-mantara","project":"infrastructure","environment":"production","service":"alloy"},
+    {"id":"prisme-api","server":"ovh-mantara","project":"prisme","environment":"production","service":"api"}
+  ],
+  "rules": []
+}

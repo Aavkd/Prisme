@@ -7,7 +7,8 @@ COPY internal ./internal
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/agent ./cmd/agent && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/probe ./cmd/probe && \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pilot ./cmd/observation-pilot
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pilot ./cmd/observation-pilot && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pki ./cmd/pki
 RUN mkdir /state && chown 10001:10001 /state
 
 FROM scratch AS api
@@ -28,3 +29,8 @@ COPY --from=build /out/pilot /pilot
 COPY --from=build --chown=10001:10001 /state /control
 USER 10001:10001
 ENTRYPOINT ["/pilot"]
+
+# One-shot production PKI tool (init, renew-server, ca-base64); never a service.
+FROM scratch AS pki
+COPY --from=build /out/pki /pki
+ENTRYPOINT ["/pki"]

@@ -24,3 +24,6 @@ google-services.json
 *.key
 *.exe
 !**/gradle-wrapper.jar
+
+# Production secrets on the VPS (deploy/production/init-secrets.sh)
+/secrets/

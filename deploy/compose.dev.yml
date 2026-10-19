@@ -36,7 +36,8 @@ services:
     volumes: [database:/var/lib/postgresql/data]
     networks: [control]
     healthcheck:
-      test: [CMD-SHELL, "pg_isready -U prisme -d prisme"]
+      # TCP, not the socket: the init-time server listens on the socket only.
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U prisme -d prisme"]
       interval: 3s
       timeout: 3s
       retries: 20

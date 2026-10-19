@@ -1,0 +1,198 @@
+# ──────────────────────────────────────────────────────────────────
+# Prisme en production sur ovh-mantara : supervision et alertes seulement.
+#
+# Depuis /opt/projects/prisme (clone partiel en lecture seule) :
+#   docker compose --env-file deploy/production/ovh-mantara.env \
+#     -f deploy/production/compose.yml up -d --build --wait
+#
+# Aucun port publié. Seul le Caddy mutualisé joint l'API, par le réseau
+# externe `edge` (alias prisme-api) ; base, stores et Alloy restent sur le
+# réseau interne `control`, sans sortie vers Internet. Les secrets sont dans
+# ../../secrets (root:10001, 0640), créés une fois par init-secrets.sh.
+# Désactivés en V1 : terminal/SFTP, déployeur, edge/Cloudflare, automatisation,
+# runbooks, coffre, notifications (étape 6) — aucune de leurs variables n'est fournie.
+# ──────────────────────────────────────────────────────────────────
+name: prisme
+
+x-logging: &logging
+  driver: json-file
+  options: {max-size: 10m, max-file: "3"}
+
+x-api: &api
+  image: prisme-api:production
+  build:
+    context: ../..
+    dockerfile: deploy/Dockerfile
+    target: api
+  user: "10001:10001"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 64
+  mem_limit: 256m
+  environment:
+    PRISME_MODE: identity
+    PRISME_AUTH_ORIGIN: ${PRISME_AUTH_ORIGIN:?}
+    PRISME_LISTEN: 0.0.0.0:8443
+    PRISME_DB_HOST: postgres:5432
+    PRISME_DB_PASSWORD_FILE: /run/secrets/db_password
+    PRISME_IDENTITY_SECRET_FILE: /run/secrets/identity_secret
+    PRISME_CA_FILE: /run/secrets/ca
+    PRISME_CA_KEY_FILE: /run/secrets/ca_key
+    PRISME_TLS_CERT_FILE: /run/secrets/tls_cert
+    PRISME_TLS_KEY_FILE: /run/secrets/tls_key
+    PRISME_OBSERVABILITY_CONFIG: /etc/prisme/observability.json
+    PRISME_METRICS_URL: http://victoriametrics:8428
+    PRISME_LOGS_URL: http://loki:3100
+    # Cleartext only to these Compose service names, on the internal network.
+    PRISME_TELEMETRY_INTERNAL_HTTP: "1"
+  secrets: [db_password, identity_secret, ca, ca_key, tls_cert, tls_key]
+  volumes:
+    - ./observability.json:/etc/prisme/observability.json:ro
+  networks: [control]
+  logging: *logging
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: prisme
+      POSTGRES_DB: prisme
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes: [database:/var/lib/postgresql/data]
+    networks: [control]
+    healthcheck:
+      # TCP, not the socket: the init-time server listens on the socket only.
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -U prisme -d prisme"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    security_opt: [no-new-privileges:true]
+    mem_limit: 384m
+    pids_limit: 128
+    restart: unless-stopped
+    logging: *logging
+
+  migrate:
+    <<: *api
+    command: [-migrate]
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  api:
+    <<: *api
+    networks:
+      control:
+      edge:
+        aliases: [prisme-api]
+    labels:
+      prisme.observation: "true"
+      prisme.project: prisme
+      prisme.environment: production
+      prisme.service: api
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+      victoriametrics: {condition: service_started}
+      loki: {condition: service_started}
+    healthcheck:
+      test: [CMD, /probe, -url, "https://localhost:8443/readyz", -ca, /run/secrets/ca]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.151.0
+    command: [-storageDataPath=/storage, -retentionPeriod=30d, -storage.minFreeDiskSpaceBytes=1073741824, -search.maxUniqueTimeseries=1000, -search.maxQueryDuration=3s, -memory.allowedBytes=192MiB]
+    volumes: [metrics:/storage]
+    networks: [control]
+    mem_limit: 256m
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    logging: *logging
+
+  loki:
+    image: grafana/loki:3.7.7
+    command: [-config.file=/etc/loki/local.yml]
+    volumes:
+      - ../observability/loki.yml:/etc/loki/local.yml:ro
+      - logs:/loki
+    networks: [control]
+    mem_limit: 384m
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    logging: *logging
+
+  alloy:
+    image: grafana/alloy:v1.19.2
+    user: "473:473"
+    # Docker socket (discovery, logs) and containerd socket (cAdvisor, root:root
+    # 0660 on the VPS): both groups are required and validated by Alexy.
+    group_add: ["${PRISME_DOCKER_SOCKET_GID:?}", "${PRISME_CONTAINERD_SOCKET_GID:?}"]
+    command: [run, --server.http.listen-addr=0.0.0.0:12345, --storage.path=/var/lib/alloy/data, --disable-reporting, /etc/alloy/config.alloy]
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy:ro
+      - alloy:/var/lib/alloy/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /sys:/sys:ro
+      - /:/host/root:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    networks: [control]
+    mem_limit: 512m
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on: [victoriametrics, loki]
+    restart: unless-stopped
+    logging: *logging
+
+  # One-shot tool, never started by `up`: see init-secrets.sh and LISEZMOI.md.
+  pki:
+    profiles: [tools]
+    image: prisme-pki:production
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+      target: pki
+    user: "0:0"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ../../secrets/pki:/secrets
+
+networks:
+  control:
+    internal: true
+  edge:
+    external: true
+
+volumes:
+  database:
+  metrics:
+  logs:
+  alloy:
+
+secrets:
+  db_password:
+    file: ../../secrets/db-password
+  identity_secret:
+    file: ../../secrets/identity-secret
+  ca:
+    file: ../../secrets/pki/ca.pem
+  ca_key:
+    file: ../../secrets/pki/ca-key.pem
+  tls_cert:
+    file: ../../secrets/pki/server.pem
+  tls_key:
+    file: ../../secrets/pki/server-key.pem
