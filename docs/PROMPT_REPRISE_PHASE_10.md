@@ -49,7 +49,7 @@ Alexy n'est pas développeur. Parler **français**, simplement, annoncer avant d
 | 3 Exposition | **Faite côté serveur** : `https://prisme.mantara.fr` (Let's Encrypt jusqu'au 17/01/2027), anonyme = `/readyz`, `/auth` et 401. **Reste** : première passkey d'Alexy (portable puis S24) — non vérifiée. |
 | 4 Collecte réelle | **Faite** : 28 sites, 41 conteneurs, disque/RAM/swap, 62 règles saines, exercice réussi. **Reste** : commande 6 (agent d'inventaire), qui attend la passkey et un jeton d'enrôlement. |
 | 5 Menaces SSH | **Faite** le 19/10 : collecteur `ssh_metrics.py` en service, 67 règles saines, exercice réussi (4 incidents ouverts puis résolus), fail2ban corrigé. **Reste** : observation 24 h (`D:\tools\vps-scripts\etape5-observation.sh` après le 20/10 21:20 UTC). |
-| 6 FCM S24 + watchdog | **Préparée en local** (19/10) : `notifications.json` (67 règles, 2 urgentes), `compose.notifications.yml`, `install-watchdog.ps1` essayé à blanc. Suite : `docs/ETAPE_6_PROCEDURE.md` (actions d'Alexy A à C, puis D à H). |
+| 6 FCM S24 + watchdog | **Préparée en local** (19/10) : `notifications.json` (67 règles, 30 urgentes : SSH, fail2ban, 28 sites), `compose.notifications.yml`, `install-watchdog.ps1` essayé à blanc. Suite : `docs/ETAPE_6_PROCEDURE.md` (actions d'Alexy A à C, puis D à H). |
 | 7 Qualification + sauvegarde | À faire. |
 | 8 Documentation + mémoire | À faire (`README.md`, dépôt `Aavkd/mantara-docs`). |
 

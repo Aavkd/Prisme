@@ -87,10 +87,12 @@ L'agent tourne en conteneur (profil `agent`), sans socket Docker : il lit l'inve
 - Une fois la clé en place, `P` inclut **toujours** le second fichier (un `up` sans lui
   recréerait l'API sans notifications ; avec lui mais sans clé, l'API refuse de démarrer) :
   `P="docker compose --env-file deploy/production/ovh-mantara.env -f deploy/production/compose.yml -f deploy/production/compose.notifications.yml"`.
-- `notifications.json` : les 67 règles notifient ; seules `VPS-SSH-UNKNOWN-LOGIN` et
-  `VPS-FAIL2BAN-DOWN` sont `urgent` (traversent les horaires silencieux réglés sur chaque
-  appareil) ; aucune relance. Un test Go vérifie qu'aucune règle n'est oubliée. Toute nouvelle
-  règle d'`observability.json` y reçoit sa ligne.
+- `notifications.json` : les 67 règles notifient ; sont `urgent` (traversent les horaires
+  silencieux réglés sur chaque appareil) `VPS-SSH-UNKNOWN-LOGIN`, `VPS-FAIL2BAN-DOWN` et les
+  28 `SITE-*-HTTP` (site injoignable ou en erreur) ; les certificats (`SITE-*-TLS`) et le reste
+  attendent la fin des horaires ; aucune relance. Un test Go vérifie qu'aucune règle n'est
+  oubliée et que tout `SITE-*-HTTP` est urgent : un **nouveau site** reçoit ses deux lignes ici
+  (HTTP urgente, TLS non urgente).
 - L'API joint `fcm.googleapis.com` par le réseau `edge` (le réseau `control` n'a pas de sortie).
 
 ## Mise à jour

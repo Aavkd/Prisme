@@ -64,8 +64,10 @@ plus après les essais : voir H.
    5 minutes). Sur le S24 : bouton passkey → « Créer ou récupérer » → ticket → passkey.
 4. Sur le S24, écran **Notifications** : autoriser les notifications Android, *Enregistrer la
    clé biométrique*, puis horaires **Silence dès 22:00 — Jusqu'à 07:00**, fuseau
-   `Europe/Paris`, *Enregistrer les horaires*. Seules les deux alertes urgentes (connexion SSH
-   inconnue, fail2ban arrêté) traverseront ces horaires.
+   `Europe/Paris`, *Enregistrer les horaires*. Seules les alertes urgentes traverseront ces
+   horaires : connexion SSH inconnue, fail2ban arrêté, et **site injoignable ou en erreur**
+   (28 sites, décision du 19/10) ; les veilleurs aussi. Le reste (certificats, disque, mémoire…)
+   attend 7 h.
 5. Toujours sur le S24 : vérifier que l'écran Serveurs et les incidents s'affichent.
 
 Reste aussi l'agent d'inventaire de l'étape 4 (jeton depuis la vue Serveurs, voir

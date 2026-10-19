@@ -700,9 +700,14 @@ des notifications (étape 6).
 ### Fait (local, sans effet sur le VPS, Firebase ou les PC)
 
 - `deploy/production/notifications.json` : les **67 règles** notifient, `group_seconds` 60,
-  aucune relance ; **urgentes : `VPS-SSH-UNKNOWN-LOGIN` et `VPS-FAIL2BAN-DOWN`** (décision du
-  19/10). Test Go : chaque règle d'`observability.json` a sa ligne, les urgentes sont
-  critiques et sont exactement ces deux-là, aucune relance sans décision.
+  aucune relance ; **urgentes : `VPS-SSH-UNKNOWN-LOGIN`, `VPS-FAIL2BAN-DOWN` et les 28
+  `SITE-*-HTTP`** (décisions d'Alexy du 19/10 ; la seconde, « un site en panne me réveille la
+  nuit », prise après la préparation). Les `SITE-*-TLS` et le reste attendent la fin des
+  horaires. Test Go : chaque règle d'`observability.json` a sa ligne, l'urgence suit exactement
+  ces décisions (tout nouveau `SITE-*-HTTP` compris), les urgentes sont critiques, aucune
+  relance sans décision. Bruit attendu : 0 incident de site depuis le début de la collecte
+  (19/10 15:05 UTC) ; en 7 h, un seul relevé en échec (`ke2c.mantara.fr`, vers le redémarrage
+  du VPS), sans incident grâce au délai de 90 s.
 - `deploy/production/compose.notifications.yml` : variable, fichier monté et secret
   `firebase_service_account` pour l'API **seulement** (`migrate` ne reçoit pas la clé) ; fusion
   vérifiée avec `docker compose config` ; ajouté à la CI.
