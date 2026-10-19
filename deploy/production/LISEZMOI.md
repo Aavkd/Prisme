@@ -61,7 +61,12 @@ L'agent tourne en conteneur (profil `agent`), sans socket Docker : il lit l'inve
 ```sh
 git pull --ff-only
 sudo $P up -d --build --wait
+sudo $P up -d --force-recreate --no-deps --wait alloy api
 ```
+
+`config.alloy` et `observability.json` sont montés **fichier par fichier** : `git pull`
+remplace le fichier et le conteneur continuerait de lire l'ancien. Recréer `alloy` et `api`
+après chaque mise à jour de ces fichiers (troisième commande).
 
 Ne jamais utiliser `down -v` : il supprime la base, les métriques et les logs.
 

@@ -425,3 +425,36 @@ depuis `/opt/projects/prisme`.
 | 4 | vérifications en lecture seule | Une série disque, swap, conteneurs en problème (attendu : 0), 28 checks, mesures des ≈ 42 conteneurs, état des 62 règles, mémoire d'Alloy, autres conteneurs intacts. |
 | 5 | `sudo touch /etc/prisme/drill`, attendre l'incident, puis `sudo rm /etc/prisme/drill` | Critère « une règle de test se déclenche puis se résout », sans toucher à aucun service. |
 | 6 | (après la passkey d'Alexy et son jeton) `sudo $P --profile agent up -d --build --wait agent` | Enrôle l'agent ; le VPS et ses conteneurs apparaissent dans la vue Serveurs. |
+
+### Exécution (19/10/2026, 15:05 → 15:18 UTC, accord d'Alexy : commandes 0 à 5)
+
+| # | Résultat |
+|---|---|
+| 0 | Avant : RAM disponible 5 070 Mo, swap 1 025 Mo, `/` 36 %, 41 conteneurs actifs (36 + 5 Prisme), tous `Up`. |
+| 1 | `git pull` → `b941784`. |
+| 2 | `install-host.sh` OK : groupe `prisme-observation` (10002), compte `prisme-collector` (UID 997 ; groupes 10002 et `docker`), minuteurs actifs, premiers fichiers écrits (`host.prom` : 0 conteneur en problème, 41 en marche sur 42 ; `inventory.json` en `0640`). RAM disponible minimale 4 521 Mo. Avertissement sans effet : la compilation en root sur le dépôt de `ubuntu` n'a pas pu lire le numéro de commit. |
+| 3 | `up -d --build --wait` : réseau `prisme_egress` créé, Alloy et API recréés, sains. RAM disponible minimale 5 075 Mo ; swap 1 035 Mo. |
+| 4 | Voir ci-dessous. |
+| 5 | **Exercice** : drapeau créé à 15:08:26 → incident `PRISME-DRILL` ouvert à 15:09:19 ; supprimé à 15:09:20 → résolu à 15:09:49 ; événements `detected`, `resolved` ; `/etc/prisme` vide ensuite. |
+
+Écart trouvé et corrigé pendant la vérification (même commandes 1 et 3, `de6c0b3`) : le libellé
+`instance` des mesures de l'hôte et d'Alloy valait le nom de machine du conteneur Alloy, qui change
+à chaque recréation ; pendant 5 minutes, les règles de l'hôte voyaient deux séries et restaient
+« inconnues ». Il est fixé à `ovh-mantara`. Alloy monte `config.alloy` **fichier par fichier** :
+après `git pull`, il a fallu `up -d --force-recreate --no-deps alloy` pour qu'il lise la nouvelle
+version (consigne ajoutée au LISEZMOI). Les anciennes séries ont expiré à 15:16:56.
+
+Vérifications finales (15:17 UTC) :
+
+- VictoriaMetrics : 28 checks de sites, tous réussis ; échéance TLS la plus proche 44,7 jours ;
+  **une seule** série disque (`/`, 48,9 Go libres) et de swap ; conteneurs en problème 0 ; âge de
+  la collecte hôte ≈ 5 s ; signal d'exercice 0 ; cAdvisor : 41 conteneurs, aucun doublon.
+- **62 règles sur 62 saines** ; seul incident : l'exercice, résolu.
+- 36 autres conteneurs : mêmes noms et images qu'avant, aucun redémarrage.
+- Mémoire de Prisme : Alloy 256 Mo (limite 512), Loki 84, VictoriaMetrics 73, Postgres 34, API 9.
+  Alloy : 4 à 13 % d'un cœur. Charge moyenne du VPS 0,6 à 1,0 (4 vCPU).
+- Après : RAM disponible 4 887 Mo, swap 1 033 Mo (+8 Mo depuis le relevé 0, stable).
+
+**Critère de l'étape 4** : la collecte et les règles sont en place et vérifiées, la règle de test
+s'est déclenchée puis résolue. **Non vérifié** : la vue Serveurs (VPS et conteneurs avec mesures
+fraîches) — elle attend l'enrôlement de l'agent, donc la première passkey d'Alexy (commande 6).
