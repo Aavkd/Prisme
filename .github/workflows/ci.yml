@@ -43,7 +43,9 @@ jobs:
       - run: docker run --rm -v "$PWD/deploy/observability/config.alloy:/etc/alloy/config.alloy:ro" grafana/alloy:v1.19.2 validate /etc/alloy/config.alloy
       - run: docker compose --env-file deploy/production/ovh-mantara.env -f deploy/production/compose.yml config --quiet
       - run: docker run --rm -v "$PWD/deploy/production/config.alloy:/etc/alloy/config.alloy:ro" grafana/alloy:v1.19.2 validate /etc/alloy/config.alloy
-      - run: sh -n deploy/production/init-secrets.sh && sh -n deploy/production/renew-server-cert.sh
+      - run: sh -n deploy/production/init-secrets.sh && sh -n deploy/production/renew-server-cert.sh && sh -n deploy/production/install-host.sh
+      - run: python3 -m unittest discover -s deploy/production/host -p 'test_*.py'
+      - run: systemd-analyze verify deploy/production/host/*.service deploy/production/host/*.timer 2>&1 | grep -v -E 'Command .* is not executable|Failed to resolve (user|group)|Unit .* not found|Configuration file .* is marked' | (! grep -E '.')
       - run: docker build --target api -f deploy/Dockerfile -t prisme-ci-api .
 
   edge:

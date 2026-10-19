@@ -346,3 +346,82 @@ le S24 » reste **non vérifié**.
 ### Toujours à faire par Alexy
 
 - Supprimer le clone fait par erreur : `Remove-Item -Recurse -Force D:\Prisme`.
+
+## Étape 4 — Collecte réelle du VPS (préparée en local, en attente d'accord)
+
+### Conception (contraintes du moteur de règles)
+
+Une règle lit **une seule série brute** de la liste blanche, avec ses horodatages d'origine ;
+une donnée absente donne l'état « inconnu », jamais un incident. D'où :
+
+- **Correctif `RawMetric`** : `RuleMetric` accepte une série brute ou sa transformation
+  **échantillon par échantillon** (horodatage conservé). Ajouts : `node_filesystem_avail_bytes`,
+  `node_memory_SwapFree_bytes`, `prisme_containers_problem`, `prisme_drill`, et deux
+  transformations : `probe_ssl_expiry_days` (jours avant expiration TLS) et
+  `prisme_host_metrics_age_seconds` (âge du fichier écrit sur l'hôte : un fichier lu par le
+  collecteur `textfile` porte l'heure de lecture, une vieille valeur passerait sinon pour
+  fraîche). Les taux et ratios (`host_cpu_percent`, `host_disk_percent`…) restent réservés aux
+  graphiques : leurs horodatages sont synthétiques. Tests Go ajoutés.
+- **Conteneurs arrêtés** : cAdvisor ne voit que les conteneurs en marche ; un conteneur arrêté
+  disparaîtrait sans alerte. `host_metrics.py` (Python 3 standard, `docker ps`/`docker inspect`
+  seulement, toutes les 30 s) compte les conteneurs arrêtés de façon inattendue (politique de
+  redémarrage ou code ≠ 0), en redémarrage, en mauvaise santé (en marche seulement) ou
+  redémarrés par Docker depuis moins de 10 min. Écrit en Python : `date` du VPS est la
+  version Rust (uutils). Tests unitaires Python (5), exécutés aussi par la CI.
+- **Disque** : seule la série `mountpoint="/"` est gardée (le VPS a aussi `/boot` et
+  `/boot/efi`) ; règle vérifiée sur des exemples.
+- **Sites** : 28 adresses servies par le Caddy mutualisé (relevé du 19/10, dont
+  `thielen.mantara.fr` et 4 redirections `www`), check HTTPS toutes les 30 s par le DNS public
+  (Cloudflare pour les domaines proxifiés, comme arpent.online), redirections non suivies.
+  Réussite : 2xx, 3xx, 401, 403 ; échec : 404, 5xx, délai, TLS invalide. `prisme.mantara.fr`
+  est vérifié sur `/readyz`. Alloy rejoint pour cela un réseau `egress` dont il est le seul
+  membre (jamais `edge`, où son interface HTTP serait visible des sites).
+- **Conteneurs (cAdvisor)** : tous les conteneurs, libellés par projet/service Compose (ou
+  libellés `prisme.*`), métriques CPU, mémoire, réseau, OOM ; logs limités à Prisme.
+- **Agent d'inventaire** : conteneur `agent` (profil `agent`, sans socket Docker) qui lit
+  l'inventaire écrit sur l'hôte par `prisme-inventory.timer` (compte `prisme-collector`) et
+  joint l'API en direct (`prisme-api` ajouté comme alias sur le réseau interne : le mTLS
+  s'arrête à Caddy). Enrôlement après la première passkey d'Alexy.
+
+Règles (62, dont 56 pour les sites) — sévérités sans `urgent` (réservé à l'étape 5) :
+
+| Règle | Seuil (ouverture / résolution) | Délai | Sévérité |
+|---|---|---|---|
+| `VPS-RAM-LOW` | RAM disponible < 1 Gio / > 1,5 Gio | 5 min | warning |
+| `VPS-DISK-ROOT` | `/` libre < 15 % / > 18 % (85 % / 82 % occupés) | 10 min | warning |
+| `VPS-SWAP-HIGH` | swap libre < 25 % / > 37,5 % (aujourd'hui ≈ 50 % utilisé) | 10 min | warning |
+| `VPS-CONTAINERS` | conteneurs en problème > 0 / = 0 | 1 min / 2 min | warning |
+| `VPS-HOST-COLLECTOR` | âge de la collecte hôte > 180 s / < 90 s | 1 min | warning |
+| `PRISME-DRILL` | signal d'exercice > 0 / = 0 | immédiat | information |
+| `SITE-<adresse>-HTTP` (×28) | check en échec | 90 s / 60 s | critical |
+| `SITE-<adresse>-TLS` (×28) | certificat < 14 j / > 21 j | 5 min | warning |
+
+### Simulation locale (Docker Desktop, 19/10/2026)
+
+- `host_metrics.py` exécuté pour de vrai contre le Docker local : a trouvé un défaut (un
+  conteneur arrêté proprement gardait l'état de santé `unhealthy` de son dernier passage et était
+  compté) → santé prise en compte pour les seuls conteneurs en marche ; test ajouté.
+- VictoriaMetrics : 28 checks de sites **tous réussis** (dont 401 roquebrune, 302
+  prototype-sad, arpent.online par Cloudflare, redirections `www`), échéance TLS la plus proche
+  44,8 jours ; swap, conteneurs en problème (5 vrais conteneurs locaux arrêtés en erreur),
+  âge de la collecte (≈ 38 s) et signal d'exercice présents ; cAdvisor : 20 conteneurs, aucun
+  doublon. Aucune série disque sur Docker Desktop (pas de `/` dans sa VM) : attendu, le VPS en a.
+- **Exercice** : drapeau créé à 14:00:35 → incident `PRISME-DRILL` ouvert à 14:01:01 ;
+  supprimé à 14:01:14 → résolu à 14:02:01 ; événements `detected`, `resolved`.
+- États : 60 règles saines, `VPS-CONTAINERS` en échec (à raison), `VPS-DISK-ROOT` inconnue
+  (attendu en local). Alloy : 217 Mo (limite 512), 5 % CPU.
+
+### Commandes proposées (aucune n'est lancée sans le « oui » d'Alexy)
+
+`P` = `docker compose --env-file deploy/production/ovh-mantara.env -f deploy/production/compose.yml`,
+depuis `/opt/projects/prisme`.
+
+| # | Commande | Effet |
+|---|---|---|
+| 0 | relevé RAM/swap/conteneurs (lecture seule) | Référence. |
+| 1 | `git pull --ff-only` | Met à jour le clone. |
+| 2 | `sudo sh deploy/production/install-host.sh` | Crée le groupe `prisme-observation` (10002) et le compte système `prisme-collector` (groupes `docker`, `prisme-observation`), installe `/usr/local/bin/prisme-inventory`, `/usr/local/lib/prisme/host_metrics.py`, `/etc/prisme`, 4 unités systemd, active 2 minuteurs. |
+| 3 | `sudo $P up -d --build --wait` | Recrée `alloy` (nouvelle config, réseau `egress`) et `api` (nouvelles règles). |
+| 4 | vérifications en lecture seule | Une série disque, swap, conteneurs en problème (attendu : 0), 28 checks, mesures des ≈ 42 conteneurs, état des 62 règles, mémoire d'Alloy, autres conteneurs intacts. |
+| 5 | `sudo touch /etc/prisme/drill`, attendre l'incident, puis `sudo rm /etc/prisme/drill` | Critère « une règle de test se déclenche puis se résout », sans toucher à aucun service. |
+| 6 | (après la passkey d'Alexy et son jeton) `sudo $P --profile agent up -d --build --wait agent` | Enrôle l'agent ; le VPS et ses conteneurs apparaissent dans la vue Serveurs. |

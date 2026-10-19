@@ -112,12 +112,13 @@ func parsePoint(v []json.RawMessage) (Point, bool) {
 	return p, true
 }
 func (s *Source) Latest(ctx context.Context, scope Scope, metric string, now time.Time) (*Point, error) {
-	if !RawMetric(metric) {
+	raw, transform, ok := ruleSeries(metric)
+	if !ok {
 		return nil, ErrUnavailable
 	}
 	// A range selector retains original sample timestamps; repeated evaluations of
 	// the same scrape must never satisfy the minimum-sample requirement.
-	out, err := s.get(ctx, s.MetricsURL, "/api/v1/query", url.Values{"query": {metric + scope.Selector() + "[5m]"}, "time": {strconv.FormatInt(now.Unix(), 10)}})
+	out, err := s.get(ctx, s.MetricsURL, "/api/v1/query", url.Values{"query": {raw + scope.Selector() + "[5m]"}, "time": {strconv.FormatInt(now.Unix(), 10)}})
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +132,10 @@ func (s *Source) Latest(ctx context.Context, scope Scope, metric string, now tim
 	p, ok := parsePoint(values[len(values)-1])
 	if !ok {
 		return nil, ErrUnavailable
+	}
+	if transform != nil && p.Value != nil {
+		v := transform(p.At, *p.Value)
+		p.Value = &v
 	}
 	return &p, nil
 }
@@ -157,6 +162,10 @@ func (s *Source) Metrics(ctx context.Context, scope Scope, metric string, start,
 		reference = "container_cpu_usage_seconds_total" + scope.Selector()
 	case "container_network_receive_bytes":
 		reference = "container_network_receive_bytes_total" + scope.Selector()
+	case "probe_ssl_expiry_days":
+		reference = "probe_ssl_earliest_cert_expiry" + scope.Selector()
+	case "prisme_host_metrics_age_seconds":
+		reference = "prisme_host_metrics_generated_seconds" + scope.Selector()
 	}
 	expression = "(" + expression + ") and on() (min(timestamp(" + reference + ")) > (time() - 90))"
 	out, err := s.get(ctx, s.MetricsURL, "/api/v1/query_range", url.Values{"query": {expression}, "start": {strconv.FormatInt(start.Unix(), 10)}, "end": {strconv.FormatInt(end.Unix(), 10)}, "step": {strconv.Itoa(step)}})

@@ -95,7 +95,7 @@ func (c Config) Validate() error {
 	// Dependencies must precede their dependents: deterministic order, no cycles.
 	for _, r := range c.Rules {
 		_, scopeOK := c.Scope(r.ScopeID)
-		if !Identifier.MatchString(r.ID) || rules[r.ID] || !scopeOK || len(r.Title) == 0 || len(r.Title) > 160 || strings.ContainsAny(r.Title, "\r\n\x00") || !RawMetric(r.Metric) || r.ForSeconds < 0 || r.ForSeconds > 86400 || r.RecoverySeconds < 0 || r.RecoverySeconds > 86400 || r.MinSamples < 2 || r.MinSamples > 1000 || r.FreshnessSeconds < 10 || r.FreshnessSeconds > 300 {
+		if !Identifier.MatchString(r.ID) || rules[r.ID] || !scopeOK || len(r.Title) == 0 || len(r.Title) > 160 || strings.ContainsAny(r.Title, "\r\n\x00") || !RuleMetric(r.Metric) || r.ForSeconds < 0 || r.ForSeconds > 86400 || r.RecoverySeconds < 0 || r.RecoverySeconds > 86400 || r.MinSamples < 2 || r.MinSamples > 1000 || r.FreshnessSeconds < 10 || r.FreshnessSeconds > 300 {
 			return fail
 		}
 		if math.IsNaN(r.OpenThreshold) || math.IsInf(r.OpenThreshold, 0) || math.IsNaN(r.ResolveThreshold) || math.IsInf(r.ResolveThreshold, 0) {
@@ -121,10 +121,36 @@ func (c Config) Validate() error {
 }
 func RawMetric(metric string) bool {
 	switch metric {
-	case "probe_success", "probe_duration_seconds", "probe_ssl_earliest_cert_expiry", "up", "node_load1", "node_memory_MemAvailable_bytes", "container_memory_usage_bytes", "prisme_worker_blocked", "prisme_queue_depth":
+	case "probe_success", "probe_duration_seconds", "probe_ssl_earliest_cert_expiry", "up", "node_load1", "node_memory_MemAvailable_bytes", "container_memory_usage_bytes", "prisme_worker_blocked", "prisme_queue_depth",
+		// Host disk (root filesystem only) and swap; textfile gauges written on the host.
+		"node_filesystem_avail_bytes", "node_memory_SwapFree_bytes", "prisme_containers_problem", "prisme_drill":
 		return true
 	}
 	return false
+}
+
+// RuleMetric accepts one raw series, optionally transformed sample by sample.
+// Both keep original sample timestamps, so freshness and minimum distinct
+// samples still hold. Rates and ratios (host_cpu_percent, ...) stay chart-only:
+// their evaluation timestamps are synthetic.
+func RuleMetric(metric string) bool {
+	_, _, ok := ruleSeries(metric)
+	return ok
+}
+
+func ruleSeries(metric string) (string, func(at time.Time, v float64) float64, bool) {
+	if RawMetric(metric) {
+		return metric, nil, true
+	}
+	switch metric {
+	case "probe_ssl_expiry_days":
+		return "probe_ssl_earliest_cert_expiry", func(at time.Time, v float64) float64 { return (v - float64(at.Unix())) / 86400 }, true
+	case "prisme_host_metrics_age_seconds":
+		// Textfile samples carry the scrape time: the file's own generation time
+		// reveals a stopped host collector.
+		return "prisme_host_metrics_generated_seconds", func(at time.Time, v float64) float64 { return float64(at.Unix()) - v }, true
+	}
+	return "", nil, false
 }
 
 // Only server-owned expressions can reach the storage engines.
@@ -144,6 +170,10 @@ func Expression(metric string, scope Scope) (string, bool) {
 		return `100 * rate(container_cpu_usage_seconds_total` + sel + `[2m])`, true
 	case "container_network_receive_bytes":
 		return `rate(container_network_receive_bytes_total` + sel + `[2m])`, true
+	case "probe_ssl_expiry_days":
+		return `(probe_ssl_earliest_cert_expiry` + sel + ` - time()) / 86400`, true
+	case "prisme_host_metrics_age_seconds":
+		return `time() - prisme_host_metrics_generated_seconds` + sel, true
 	}
 	return "", false
 }

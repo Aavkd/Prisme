@@ -87,3 +87,47 @@ func TestRedaction(t *testing.T) {
 		}
 	}
 }
+func TestRuleMetricsKeepOriginalSampleTimestamps(t *testing.T) {
+	sampled := time.Now().UTC().Add(-20 * time.Second).Truncate(time.Second)
+	expiry := sampled.Add(10*24*time.Hour + 12*time.Hour)
+	scope := Scope{ID: "site", Server: "ovh-mantara", Project: "mantara.fr", Environment: "production", Service: "web"}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if q := r.URL.Query().Get("query"); q != "probe_ssl_earliest_cert_expiry"+scope.Selector()+"[5m]" {
+			t.Errorf("unexpected rule query %q", q)
+		}
+		fmt.Fprintf(w, `{"status":"success","data":{"resultType":"matrix","result":[{"metric":{},"values":[[%d,"%d"]]}]}}`, sampled.Unix(), expiry.Unix())
+	}))
+	defer server.Close()
+	source, _ := NewSource(server.URL, server.URL, true)
+	p, err := source.Latest(context.Background(), scope, "probe_ssl_expiry_days", time.Now())
+	if err != nil || p == nil || !p.At.Equal(sampled) || *p.Value != 10.5 {
+		t.Fatalf("expiry days not computed from the sample itself: %+v %v", p, err)
+	}
+	age := ruleTransform(t, "prisme_host_metrics_age_seconds")
+	if v := age(sampled, float64(sampled.Unix()-240)); v != 240 {
+		t.Fatalf("host collector age %v", v)
+	}
+	for _, m := range []string{"probe_ssl_expiry_days", "prisme_host_metrics_age_seconds", "node_filesystem_avail_bytes", "node_memory_SwapFree_bytes", "prisme_containers_problem", "prisme_drill", "probe_success"} {
+		if !RuleMetric(m) {
+			t.Fatalf("%s refused in rules", m)
+		}
+	}
+	// Rates and ratios use synthetic timestamps: charts only, never rules.
+	for _, m := range []string{"host_cpu_percent", "host_memory_percent", "host_disk_percent", "container_cpu_percent", "up or vector(1)"} {
+		if RuleMetric(m) {
+			t.Fatalf("%s accepted in rules", m)
+		}
+	}
+	if e, ok := Expression("probe_ssl_expiry_days", scope); !ok || !strings.Contains(e, "- time()") {
+		t.Fatal("expiry days not chartable")
+	}
+}
+
+func ruleTransform(t *testing.T, metric string) func(time.Time, float64) float64 {
+	t.Helper()
+	_, transform, ok := ruleSeries(metric)
+	if !ok || transform == nil {
+		t.Fatalf("%s has no sample transform", metric)
+	}
+	return transform
+}

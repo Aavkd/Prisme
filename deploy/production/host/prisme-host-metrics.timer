@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh the Prisme host gauges every 30 seconds
+
+[Timer]
+OnBootSec=20
+OnUnitActiveSec=30
+AccuracySec=1
+
+[Install]
+WantedBy=timers.target

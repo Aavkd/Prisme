@@ -86,7 +86,9 @@ services:
   api:
     <<: *api
     networks:
+      # The agent reaches the API directly here (mTLS ends at Caddy on `edge`).
       control:
+        aliases: [prisme-api]
       edge:
         aliases: [prisme-api]
     labels:
@@ -148,12 +150,41 @@ services:
       - /:/host/root:ro
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
-    networks: [control]
+    # `egress` (Alloy alone, with Internet access) carries the site checks.
+    networks: [control, egress]
     mem_limit: 512m
     pids_limit: 128
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     depends_on: [victoriametrics, loki]
+    restart: unless-stopped
+    logging: *logging
+
+  # Started only with `--profile agent`, once enrolled (LISEZMOI.md). It reads the
+  # snapshot written on the host by prisme-inventory.timer; no Docker socket here.
+  agent:
+    profiles: [agent]
+    image: prisme-agent:production
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+      target: agent
+    user: "10001:10001"
+    group_add: ["${PRISME_OBSERVATION_GID:?}"]
+    command: [-url, "https://prisme-api:8443", -ca, /run/secrets/ca, -token-file, /enrollment/token, -state-dir, /state, -inventory-file, /inventory/inventory.json, -name, ovh-mantara]
+    secrets: [ca]
+    volumes:
+      - agent_identity:/state
+      - /var/lib/prisme-observation:/inventory:ro
+      - ../../secrets/agent:/enrollment:ro
+    networks: [control]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 64m
+    depends_on:
+      api: {condition: service_healthy}
     restart: unless-stopped
     logging: *logging
 
@@ -176,6 +207,7 @@ services:
 networks:
   control:
     internal: true
+  egress: {}
   edge:
     external: true
 
@@ -184,6 +216,7 @@ volumes:
   metrics:
   logs:
   alloy:
+  agent_identity:
 
 secrets:
   db_password:

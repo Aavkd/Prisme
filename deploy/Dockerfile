@@ -8,7 +8,8 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/agent ./cmd/agent && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/probe ./cmd/probe && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pilot ./cmd/observation-pilot && \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pki ./cmd/pki
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pki ./cmd/pki && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/prisme-inventory ./cmd/inventory
 RUN mkdir /state && chown 10001:10001 /state
 
 FROM scratch AS api
@@ -34,3 +35,7 @@ ENTRYPOINT ["/pilot"]
 FROM scratch AS pki
 COPY --from=build /out/pki /pki
 ENTRYPOINT ["/pki"]
+
+# Host binaries, exported with `docker build --target host-tools --output type=local,dest=DIR`.
+FROM scratch AS host-tools
+COPY --from=build /out/prisme-inventory /prisme-inventory
