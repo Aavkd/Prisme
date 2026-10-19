@@ -8,6 +8,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/signal"
 	"time"
@@ -77,6 +78,14 @@ func run() error {
 		address = "127.0.0.1:8443"
 	}
 	app := &api.Server{DB: db, CA: ca, Bootstrap: secret, Mode: mode, Now: func() time.Time { return time.Now().UTC() }}
+	// Only the shared reverse proxy's private Docker network may name the client.
+	if v := os.Getenv("PRISME_TRUSTED_PROXY_CIDR"); v != "" {
+		proxy, err := netip.ParsePrefix(v)
+		if err != nil || !proxy.Addr().IsPrivate() || proxy.Bits() < 8 {
+			return errors.New("trusted proxy network must be a private CIDR")
+		}
+		app.TrustedProxy = proxy.Masked()
+	}
 	if origin := os.Getenv("PRISME_AUTH_ORIGIN"); origin != "" {
 		app.WebAuthn, err = api.NewWebAuthn(origin)
 		if err != nil {

@@ -253,6 +253,41 @@ Vérifications (étape 6) :
 **Critère de l'étape 2 atteint** : conteneurs sains, aucun port publié, RAM de Prisme sous 2 Go,
 autres conteneurs intacts.
 
+## Étape 3 — Exposition `prisme.mantara.fr` (préparation)
+
+### Limitation de débit derrière Caddy (correctif validé par Alexy le 19/10/2026)
+
+- `Server.TrustedProxy` / `PRISME_TRUSTED_PROXY_CIDR` : seul un réseau **privé** d'au moins /8
+  est accepté (sinon l'API refuse de démarrer). Si le pair TCP en fait partie, l'adresse du client
+  est le **dernier** élément de `X-Forwarded-For` (Caddy le remplace par l'IP de son client) ;
+  valeur invalide ou absente → adresse du pair. Hors de ce réseau, ou sans réglage, l'en-tête
+  n'est jamais lu. La même adresse sert à la limitation de débit et à `audit_events.remote_address`.
+- Production : `PRISME_TRUSTED_PROXY_CIDR=172.22.0.0/16` (réseau `edge` du VPS) dans
+  `ovh-mantara.env`.
+- Tests Go : quotas séparés par client derrière le proxy, dernier saut retenu, en-tête invalide
+  → adresse du proxy, en-têtes ignorés hors réseau et sans réglage ; suite complète OK avec
+  PostgreSQL.
+- Simulation (Docker Desktop, réseau `edge` `10.222.0.0/24`, Caddy 2.11.4) :
+
+  | Client | Résultat |
+  |---|---|
+  | A, sur `edge`, via Caddy, `X-Forwarded-For` falsifié différent à chaque requête | 120 × 401 puis 429 : Caddy écrase l'en-tête, A garde son quota |
+  | B, sur `edge`, via Caddy, pendant que A est bloqué | **401** (avant le correctif : 429, quota partagé) |
+  | C, sur `prisme_control` (hors `edge`), direct sur l'API, en-tête falsifié | 120 × 401 puis 429 : en-tête ignoré |
+  | Audit des rejets | adresses réelles de A (`10.222.0.4`), B (`.5`) et C (`172.24.0.7`) ; jamais celle de Caddy ni une adresse falsifiée |
+
+- **Risque résiduel accepté** : un conteneur déjà présent sur `edge` (les sites clients) peut
+  joindre `prisme-api` directement et choisir son `X-Forwarded-For`, donc obtenir de nouveaux
+  quotas anonymes. Les plafonds globaux (6 000 requêtes/min, 32 simultanées) et
+  l'authentification restent inchangés.
+
+### DNS (19/10/2026)
+
+Vérifié depuis le VPS : `prisme.mantara.fr` répond encore `64.29.17.65` et `216.198.79.1` sur
+1.1.1.1, 8.8.8.8 **et** les serveurs Cloudflare qui font autorité. C'est l'enregistrement
+générique `*.mantara.fr` (un sous-domaine inexistant donne les mêmes adresses) : l'enregistrement
+explicite **A `prisme` → 51.255.163.21, nuage gris** n'existe pas encore. Bloc Caddy **non activé**.
+
 ### Toujours à faire par Alexy
 
 - Supprimer le clone fait par erreur : `Remove-Item -Recurse -Force D:\Prisme`.

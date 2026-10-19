@@ -3,16 +3,14 @@ package api
 import (
 	"context"
 	"database/sql"
-	"net"
 	"net/http"
 )
 
 type auditContextKey struct{}
 type auditContext struct{ Actor, Device, Origin, Correlation, Address string }
 
-func requestAuditContext(r *http.Request) context.Context {
+func requestAuditContext(r *http.Request, address string) context.Context {
 	correlation, _ := randomID()
-	address, _, _ := net.SplitHostPort(r.RemoteAddr)
 	return context.WithValue(r.Context(), auditContextKey{}, auditContext{Origin: "application", Correlation: correlation, Address: address})
 }
 

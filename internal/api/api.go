@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/netip"
 	"regexp"
 	"strings"
 	"time"
@@ -46,7 +47,9 @@ type Server struct {
 	IdentityBootstrap string
 	WebAuthn          *webauthn.WebAuthn
 	Now               func() time.Time
-	admission         admission
+	// Reverse proxy network allowed to name the client (X-Forwarded-For).
+	TrustedProxy netip.Prefix
+	admission    admission
 }
 
 func Hash(v string) string { sum := sha256.Sum256([]byte(v)); return hex.EncodeToString(sum[:]) }
@@ -109,13 +112,13 @@ func (s *Server) Handler() http.Handler {
 			timeout = 30 * time.Second
 		}
 		if strings.HasSuffix(r.URL.Path, "/stream") && strings.HasPrefix(r.URL.Path, "/v1/operations/sessions/") {
-			mux.ServeHTTP(w, r.WithContext(requestAuditContext(r)))
+			mux.ServeHTTP(w, r.WithContext(requestAuditContext(r, s.clientAddress(r))))
 			return
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
 		r = r.WithContext(ctx)
-		r = r.WithContext(requestAuditContext(r))
+		r = r.WithContext(requestAuditContext(r, s.clientAddress(r)))
 		recorder := &statusWriter{ResponseWriter: w}
 		mux.ServeHTTP(recorder, r)
 		recordRejection(s.DB, r, recorder.status)

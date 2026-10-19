@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -11,7 +12,7 @@ import (
 
 // Admission is bounded even when callers rotate addresses or invalid tokens.
 // Only database-verified sessions and mTLS-verified certificates get a separate
-// allowance. Forwarded headers are deliberately not an identity boundary.
+// allowance. Forwarded headers count only from the TrustedProxy network.
 type admission struct {
 	mu                     sync.Mutex
 	buckets                map[string]int
@@ -52,11 +53,7 @@ func (s *Server) admit(w http.ResponseWriter, r *http.Request) (func(), bool) {
 			a.active--
 		}
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	key, limit := "ip:"+host, 120
+	key, limit := "ip:"+s.clientAddress(r), 120
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second)
 	defer cancel()
 	if s.DB != nil && opaque.MatchString(bearer(r)) {
@@ -99,4 +96,29 @@ func (s *Server) admit(w http.ResponseWriter, r *http.Request) (func(), bool) {
 		return nil, false
 	}
 	return release, true
+}
+
+// clientAddress is the TCP peer, unless that peer belongs to TrustedProxy (the
+// shared Caddy's Docker network). Caddy replaces X-Forwarded-For with its own
+// client's address, so the last entry is the caller; a malformed value keeps
+// the peer. Without TrustedProxy, forwarded headers are never read.
+func (s *Server) clientAddress(r *http.Request) string {
+	peer, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		peer = r.RemoteAddr
+	}
+	ip, err := netip.ParseAddr(peer)
+	if !s.TrustedProxy.IsValid() || err != nil || !s.TrustedProxy.Contains(ip.Unmap()) {
+		return peer
+	}
+	values := r.Header.Values("X-Forwarded-For")
+	if len(values) == 0 {
+		return peer
+	}
+	hops := strings.Split(values[len(values)-1], ",")
+	client, err := netip.ParseAddr(strings.TrimSpace(hops[len(hops)-1]))
+	if err != nil || client.Zone() != "" {
+		return peer
+	}
+	return client.Unmap().String()
 }

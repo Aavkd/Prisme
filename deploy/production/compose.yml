@@ -46,6 +46,8 @@ x-api: &api
     PRISME_LOGS_URL: http://loki:3100
     # Cleartext only to these Compose service names, on the internal network.
     PRISME_TELEMETRY_INTERNAL_HTTP: "1"
+    # Only the shared Caddy's network may name the client (X-Forwarded-For).
+    PRISME_TRUSTED_PROXY_CIDR: ${PRISME_TRUSTED_PROXY_CIDR:?}
   secrets: [db_password, identity_secret, ca, ca_key, tls_cert, tls_key]
   volumes:
     - ./observability.json:/etc/prisme/observability.json:ro
