@@ -509,11 +509,125 @@ aux mêmes heures. Aucune adresse d'Alexy n'a été bannie ni n'a d'échec en 30
 ### Décisions d'Alexy (19/10/2026)
 
 1. Adresses connues : celles qu'il a confirmées ; le fichier d'IP connues reste **sur le VPS
-   seulement**, hors dépôt. Les adresses non reconnues sont en cours de vérification avec lui.
+   seulement**, hors dépôt. Trois lieux d'abord non reconnus ont été vérifiés puis confirmés
+   par Alexy (voir ci-dessous) ; seules la tour et une ligne fixe sont dans la liste.
 2. Connexions mobiles (adresse changeante) : **alerte urgente à chaque connexion**, pas de plage
    autorisée.
 3. Clé de déploiement GitHub Actions (adresse changeante) : **alerte urgente à chaque usage**,
    pas d'exception.
 4. Seuil d'avertissement : **plus de 150 échecs sur les 10 dernières minutes, maintenu 10 min**,
    résolution sous 75 (0 alerte sur les 30 jours de bruit réel). Remplace le « > 50 » initial.
-5. fail2ban : correction à préparer (commandes exactes soumises à Alexy avant exécution).
+5. fail2ban : correction validée puis appliquée le 19/10 à 20:23 UTC (voir ci-dessous).
+
+### Connexions d'abord non reconnues (19/10/2026, lecture seule)
+
+Trois lieux de connexion par la clé personnelle d'Alexy n'étaient pas reconnus au premier abord
+(un réseau d'entreprise, une ligne fixe Orange, un réseau professionnel ; 5 adresses entre le
+11/09 et le 14/10). Enquête en lecture seule avant toute autre action :
+
+- **Aucune trace d'installation** : comptes avec shell (`root`, `ubuntu`, `ke2c-copie` créé le
+  18/09), fichiers `authorized_keys` modifiés seulement le 18/09, `sudoers.d` d'origine, aucune
+  crontab utilisateur, unités systemd récentes = celles de Prisme, aucun port d'écoute inattendu.
+- **Commandes** (journal `sudo`, par tranche horaire) : audits du VPS (`ufw status`, `du`,
+  `sshd -T`, journaux), installation de la copie de sauvegarde KE2C vers la tour (la tour s'est
+  connectée deux minutes après), mise en place du projet `offres`.
+- **Recoupement GitHub** : le dépôt `Aavkd/mantara-offres` et sa clé de déploiement ont été créés
+  sur le compte d'Alexy **à la même minute** que la clé et le clone correspondants sur le VPS ;
+  commits d'Alexy aux mêmes heures les autres jours.
+- Alexy a **confirmé** que les trois lieux sont les siens. Aucune clé à remplacer. Ils restent
+  hors de la liste des adresses connues : une connexion depuis ces lieux ouvrira une alerte
+  urgente, qu'il reconnaîtra.
+
+### Correction de fail2ban (19/10/2026, 20:23 UTC, accord d'Alexy)
+
+**Défaut** (aujourd'hui corrigé) : le fichier du paquet `jail.d/defaults-debian.conf` imposait
+`journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd`, alors que les échecs sont écrits par
+`sshd-session` : fail2ban n'en voyait aucun (0 sur 1 491 depuis son installation). De plus,
+`mantara-sshd.local` avait été écrit 6 s après son démarrage et jamais rechargé (ban de 10 min
+au lieu d'1 h).
+
+Commandes exécutées (annoncées à l'identique avant le « oui » ; adresses masquées ici) :
+
+```sh
+sudo cp -p /etc/fail2ban/jail.d/mantara-sshd.local /etc/fail2ban/mantara-sshd.local.bak-20261019
+printf '%s\n' 'journalmatch = _SYSTEMD_UNIT=ssh.service + _COMM=sshd + _COMM=sshd-session' 'ignoreip = 127.0.0.1/8 ::1 <tour> <ligne fixe>' | sudo tee -a /etc/fail2ban/jail.d/mantara-sshd.local
+sudo fail2ban-client -t && sudo fail2ban-client reload
+```
+
+Résultat : test de configuration réussi, rechargement OK ; filtre
+`_SYSTEMD_UNIT=ssh.service + _COMM=sshd + _COMM=sshd-session`, `bantime` 3 600 s, deux adresses
+d'Alexy ignorées (en plus de `127.0.0.0/8` et `::1`). 42 conteneurs identiques avant et après,
+RAM disponible 5 284 Mo, swap 17 Mo. Retour arrière : remettre la copie, puis
+`sudo fail2ban-client reload`. Débannir : `sudo fail2ban-client set sshd unbanip <adresse>`.
+
+Vérification : à 20:31 UTC, fail2ban avait détecté **8 échecs sur les 8** comptés dans le journal
+sur les 10 dernières minutes (essai à blanc du collecteur ci-dessous). À 20:33 UTC, 10 min après le
+rechargement : 7 échecs venant de 4 adresses, aucune n'atteignant 5 échecs, donc aucun ban attendu ; RAM
+disponible 5 273 Mo, swap 17 Mo.
+
+### Redémarrage du VPS (19/10/2026, 20:05 UTC)
+
+Redémarrage programmé par un autre chantier, avec l'accord d'Alexy (« Redémarrage prévu pour
+charger le noyau 7.0.0-38 »), sans lien avec Prisme. Noyau 7.0.0-38, plus de redémarrage en
+attente. **Prisme est reparti seul** : 5 services démarrés (API et PostgreSQL `healthy`), minuteurs
+actifs, collecte hôte fraîche, `/readyz` → 200. Swap revenu à 17 Mo.
+
+### Préparation locale (sans effet sur le VPS)
+
+- **`deploy/production/host/ssh_metrics.py`** (Python 3 standard), lancé toutes les 30 s par
+  `prisme-ssh-metrics.timer` sous `prisme-collector`, **sans accès à Docker**
+  (`InaccessiblePaths`) et avec le groupe `adm` pour cette seule unité (le compte n'est pas
+  modifié). Il lit le journal de `ssh.service`, `systemctl is-active fail2ban` et
+  `/var/log/fail2ban.log` (+ `.1`), et écrit `ssh.prom` dans le dossier déjà lu par Alloy
+  (aucune modification d'Alloy). Mesures : échecs sur 10 min, connexions réussies et connexions
+  depuis une adresse inconnue sur 30 min, fail2ban actif, adresses bannies, détections de
+  fail2ban sur 10 min, fail2ban « aveugle » (actif mais aucune détection pour 20 échecs ou plus),
+  exercices, heure de génération. **Aucune adresse dans les mesures** (donnée personnelle,
+  cardinalité) : une connexion inconnue est décrite dans le journal de l'unité.
+- Liste des adresses connues : `/etc/prisme/ssh-known-ips`, hors dépôt ; sans elle, l'unité ne
+  démarre pas (`ConditionPathExists`) et une liste invalide fait échouer la collecte. En cas
+  d'échec, `ssh.prom` n'est pas réécrit : son âge déclenche `VPS-SSH-COLLECTOR`.
+- **Exercices** : quatre drapeaux dans `/etc/prisme` (`drill-ssh-unknown-login`,
+  `drill-fail2ban-down`, `drill-ssh-failures`, `drill-fail2ban-blind`), qui ne peuvent
+  qu'ajouter des alarmes.
+- Code : 7 métriques ajoutées à `RawMetric`, transformation `prisme_ssh_metrics_age_seconds` ;
+  **67 règles** (5 nouvelles) :
+
+  | Règle | Seuil (ouverture / résolution) | Délai | Sévérité |
+  |---|---|---|---|
+  | `VPS-SSH-UNKNOWN-LOGIN` | connexions inconnues sur 30 min > 0 / = 0 | 2 relevés / 1 min | critical (urgent à l'étape 6) |
+  | `VPS-FAIL2BAN-DOWN` | fail2ban actif < 1 / = 1 | 1 min / 1 min | critical (urgent à l'étape 6) |
+  | `VPS-SSH-FAILURES` | échecs sur 10 min > 150 / ≤ 75 | 10 min / 5 min | warning |
+  | `VPS-FAIL2BAN-BLIND` | aveugle > 0 / = 0 | 15 min / 5 min | warning (proposée en plus) |
+  | `VPS-SSH-COLLECTOR` | âge de la collecte SSH > 180 s / < 90 s | 1 min / 1 min | warning |
+
+- **Tests** : 9 tests Python (formats réels du journal et de fail2ban, adresses connues et
+  IPv6, liste invalide refusée, bans après redémarrage de fail2ban, aveuglement, exercices) ; 2
+  tests Go qui chargent **la vraie configuration de production** et rejouent les relevés : le
+  pire bruit mesuré (141 pendant 30 min, pointe à 236) n'ouvre rien, 151 pendant 9 min non plus,
+  une attaque à 400 ouvre à 10 min pile et se résout 5 min après ; connexion inconnue ouverte en
+  15 s, résolue 1 min après la fin de la fenêtre ; rechargement de fail2ban (45 s) sans incident,
+  arrêt détecté en 1 min.
+- **Essai à blanc sur le VPS** (lecture seule, sortie à l'écran, rien d'écrit) avec `setpriv`
+  sous `prisme-collector` + `adm` : échecs 8, fail2ban 8 détections, 12 connexions dont 0
+  inconnue, fail2ban actif, 0 ban (identique à `fail2ban-client`). Sans `adm` : refus
+  (`journal unreadable`), rien n'est écrit.
+
+### Commandes proposées (aucune n'est lancée sans le « oui » d'Alexy)
+
+`P` = `docker compose --env-file deploy/production/ovh-mantara.env -f deploy/production/compose.yml`,
+depuis `/opt/projects/prisme`. Adresses masquées ici, données en clair à Alexy dans le chat.
+
+| # | Commande | Effet |
+|---|---|---|
+| 0 | relevé RAM/swap/conteneurs (lecture seule) | Référence. |
+| 1 | `git pull --ff-only` | Met à jour le clone. |
+| 2 | `printf '%s\n' '# Adresses SSH connues, validées par Alexy le 19/10/2026' '<tour>' '<ligne fixe>' \| sudo tee /etc/prisme/ssh-known-ips && sudo chown root:prisme-observation /etc/prisme/ssh-known-ips && sudo chmod 0640 /etc/prisme/ssh-known-ips` | Crée la liste des adresses connues (hors dépôt). |
+| 3 | `sudo sh deploy/production/install-host.sh` | Installe `ssh_metrics.py` et `prisme-ssh-metrics.{service,timer}`, active le minuteur ; réinstalle les deux autres collecteurs à l'identique. |
+| 4 | `sudo $P up -d --build --wait` puis `sudo $P up -d --force-recreate --no-deps --wait api` | Recompile l'API (nouvelles métriques) et lui fait relire `observability.json` (67 règles). Alloy n'a pas besoin d'être recréé. |
+| 5 | vérifications en lecture seule | `ssh.prom`, 9 séries dans VictoriaMetrics, 67 règles saines, autres conteneurs intacts. |
+| 6 | `sudo touch` des quatre drapeaux d'exercice, attendre ≈ 16 min, puis `sudo rm` des quatre | Critère de l'étape 5 : quatre incidents ouverts puis résolus sur métriques synthétiques, sans toucher à SSH ni à fail2ban. Aucune notification encore (étape 6). |
+| 7 | observation 24 h (lecture seule) | Aucun faux positif. |
+
+Retour arrière : `sudo systemctl disable --now prisme-ssh-metrics.timer` et
+`sudo rm /var/lib/prisme-metrics/ssh.prom` (les règles passent à « inconnu »).
