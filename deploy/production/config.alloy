@@ -216,6 +216,12 @@ prometheus.scrape "host" {
   forward_to      = [prometheus.relabel.host.receiver]
 }
 prometheus.relabel "host" {
+  // Alloy's container hostname changes at every recreation: a fixed instance
+  // keeps one series per metric (rules need exactly one).
+  rule {
+    target_label = "instance"
+    replacement  = "ovh-mantara"
+  }
   // Rules need exactly one series: keep the root filesystem only.
   rule {
     source_labels = ["__name__", "mountpoint"]
@@ -249,6 +255,12 @@ prometheus.scrape "alloy" {
   forward_to      = [prometheus.relabel.alloy.receiver]
 }
 prometheus.relabel "alloy" {
+  // Alloy's container hostname changes at every recreation: a fixed instance
+  // keeps one series per metric (rules need exactly one).
+  rule {
+    target_label = "instance"
+    replacement  = "ovh-mantara"
+  }
   rule {
     target_label = "server"
     replacement  = "ovh-mantara"
