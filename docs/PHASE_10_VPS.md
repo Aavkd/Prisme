@@ -458,3 +458,62 @@ Vérifications finales (15:17 UTC) :
 **Critère de l'étape 4** : la collecte et les règles sont en place et vérifiées, la règle de test
 s'est déclenchée puis résolue. **Non vérifié** : la vue Serveurs (VPS et conteneurs avec mesures
 fraîches) — elle attend l'enrôlement de l'agent, donc la première passkey d'Alexy (commande 6).
+
+## Étape 5 — Menaces SSH (relevés faits, décisions prises, préparation locale à faire)
+
+### Relevés en lecture seule (19/10/2026, 15:55 → 16:20 UTC)
+
+Scripts lancés depuis la tour par `ssh ovh-mantara 'bash -s'`, sans rien écrire sur le VPS
+(`D:\tools\vps-scripts\ssh-releves*.sh`). RAM disponible 4 678 à 4 855 Mo, swap 1 032 Mo stable.
+
+**Source** : journal `ssh.service` (il remonte au 14/07, donc 30 jours complets). `sshd` n'accepte
+que les clés (`passwordauthentication no`, `permitrootlogin no`, `maxauthtries 3`). Depuis
+OpenSSH 9.8, toutes les lignes d'échec viennent du programme **`sshd-session`**, pas de `sshd`.
+
+**Définition d'un échec** (une fois par connexion) : `Invalid user … from` (nom inexistant) ou
+`Connection closed by | Disconnected from | Connection reset by authenticating user … [preauth]`
+(compte existant, clé refusée). Les simples sondages (délai dépassé, négociation impossible,
+connexion coupée sans nom) sont comptés à part : ≈ 240 par jour.
+
+| Mesure | 7 jours (12 → 19/10) | 30 jours (19/09 → 19/10) |
+|---|---|---|
+| Échecs | 17 886 (7 564 noms inexistants, 10 322 comptes existants, dont `root` 9 830 et `ubuntu` 433) | 76 954 |
+| Par jour | 2 000 à 3 250 (40 à 115 IP distinctes) | 1 200 à 4 800 |
+| 10 min alignées : médiane / 90e / 99e centile / max | 14 / 33 / 97 / 135 | 13 / 35 / 94 / 236 (30/09) |
+| Fenêtres de 10 min au-dessus de 50 | 31 | 236 |
+
+Le « ≈ 1 000 par jour » des consignes correspond aux seuls noms inexistants ; avec les comptes
+existants, c'est 2 à 3 fois plus. Les pointes viennent d'une seule IP (≈ 90 à 110 échecs en
+10 min), que fail2ban devrait couper.
+
+Alertes qu'aurait produites une mesure « échecs des 10 dernières minutes » relevée toutes les
+30 s, sur les 30 jours (résolution sous la moitié du seuil) :
+
+| Seuil | sans délai | maintenu 5 min | maintenu 10 min | maintenu 15 min |
+|---|---|---|---|---|
+| > 50 | 131 | 116 | 65 | 18 |
+| > 100 | 41 | 35 | 5 | 1 |
+| > 150 | 7 | 3 | **0** | 0 |
+| > 200 | 1 | 1 | 0 | 0 |
+
+**Le seuil décidé (> 50 en 10 min) déclencherait ≈ 4 alertes par jour sur le bruit normal.**
+
+**fail2ban et connexions réussies** : un défaut de configuration de fail2ban a été trouvé
+(il ne coupe pas les rafales comme prévu) et plusieurs connexions réussies par clé viennent
+d'adresses à vérifier. Détails, adresses et commandes **hors dépôt** jusqu'à la correction
+(note locale de la tour, `D:\tools\vps-scripts\etape5-notes-sensibles.md`). Une enquête en
+lecture seule n'a trouvé aucune trace d'installation (comptes, clés, tâches planifiées, services,
+ports d'écoute) ; les connexions vérifiées sont cohérentes avec l'activité d'Alexy sur GitHub
+aux mêmes heures. Aucune adresse d'Alexy n'a été bannie ni n'a d'échec en 30 jours.
+
+### Décisions d'Alexy (19/10/2026)
+
+1. Adresses connues : celles qu'il a confirmées ; le fichier d'IP connues reste **sur le VPS
+   seulement**, hors dépôt. Les adresses non reconnues sont en cours de vérification avec lui.
+2. Connexions mobiles (adresse changeante) : **alerte urgente à chaque connexion**, pas de plage
+   autorisée.
+3. Clé de déploiement GitHub Actions (adresse changeante) : **alerte urgente à chaque usage**,
+   pas d'exception.
+4. Seuil d'avertissement : **plus de 150 échecs sur les 10 dernières minutes, maintenu 10 min**,
+   résolution sous 75 (0 alerte sur les 30 jours de bruit réel). Remplace le « > 50 » initial.
+5. fail2ban : correction à préparer (commandes exactes soumises à Alexy avant exécution).

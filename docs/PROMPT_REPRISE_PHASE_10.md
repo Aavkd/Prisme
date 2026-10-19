@@ -48,7 +48,7 @@ Alexy n'est pas développeur. Parler **français**, simplement, annoncer avant d
 | 2 Installation VPS | **Faite.** Pile `prisme` dans `/opt/projects/prisme` (5 services sains, aucun port publié). |
 | 3 Exposition | **Faite côté serveur** : `https://prisme.mantara.fr` (Let's Encrypt jusqu'au 17/01/2027), anonyme = `/readyz`, `/auth` et 401. **Reste** : première passkey d'Alexy (portable puis S24) — non vérifiée. |
 | 4 Collecte réelle | **Faite** : 28 sites, 41 conteneurs, disque/RAM/swap, 62 règles saines, exercice réussi. **Reste** : commande 6 (agent d'inventaire), qui attend la passkey et un jeton d'enrôlement. |
-| 5 Menaces SSH | À préparer (rien commencé, pas même les relevés). |
+| 5 Menaces SSH | **Relevés faits, décisions prises** (19/10, voir le journal). Reste : vérification des adresses non reconnues, correction fail2ban (accord), script + métriques + règles. Rien d'installé. |
 | 6 FCM S24 + watchdog | À faire. |
 | 7 Qualification + sauvegarde | À faire. |
 | 8 Documentation + mémoire | À faire (`README.md`, dépôt `Aavkd/mantara-docs`). |
