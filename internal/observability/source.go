@@ -166,6 +166,8 @@ func (s *Source) Metrics(ctx context.Context, scope Scope, metric string, start,
 		reference = "probe_ssl_earliest_cert_expiry" + scope.Selector()
 	case "prisme_host_metrics_age_seconds":
 		reference = "prisme_host_metrics_generated_seconds" + scope.Selector()
+	case "prisme_ssh_metrics_age_seconds":
+		reference = "prisme_ssh_metrics_generated_seconds" + scope.Selector()
 	}
 	expression = "(" + expression + ") and on() (min(timestamp(" + reference + ")) > (time() - 90))"
 	out, err := s.get(ctx, s.MetricsURL, "/api/v1/query_range", url.Values{"query": {expression}, "start": {strconv.FormatInt(start.Unix(), 10)}, "end": {strconv.FormatInt(end.Unix(), 10)}, "step": {strconv.Itoa(step)}})

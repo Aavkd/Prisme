@@ -123,7 +123,10 @@ func RawMetric(metric string) bool {
 	switch metric {
 	case "probe_success", "probe_duration_seconds", "probe_ssl_earliest_cert_expiry", "up", "node_load1", "node_memory_MemAvailable_bytes", "container_memory_usage_bytes", "prisme_worker_blocked", "prisme_queue_depth",
 		// Host disk (root filesystem only) and swap; textfile gauges written on the host.
-		"node_filesystem_avail_bytes", "node_memory_SwapFree_bytes", "prisme_containers_problem", "prisme_drill":
+		"node_filesystem_avail_bytes", "node_memory_SwapFree_bytes", "prisme_containers_problem", "prisme_drill",
+		// SSH threats (ssh_metrics.py): counts only, never an address.
+		"prisme_ssh_failures_10m", "prisme_ssh_logins_30m", "prisme_ssh_unknown_logins_30m",
+		"prisme_fail2ban_up", "prisme_fail2ban_banned", "prisme_fail2ban_found_10m", "prisme_fail2ban_blind":
 		return true
 	}
 	return false
@@ -149,6 +152,8 @@ func ruleSeries(metric string) (string, func(at time.Time, v float64) float64, b
 		// Textfile samples carry the scrape time: the file's own generation time
 		// reveals a stopped host collector.
 		return "prisme_host_metrics_generated_seconds", func(at time.Time, v float64) float64 { return float64(at.Unix()) - v }, true
+	case "prisme_ssh_metrics_age_seconds":
+		return "prisme_ssh_metrics_generated_seconds", func(at time.Time, v float64) float64 { return float64(at.Unix()) - v }, true
 	}
 	return "", nil, false
 }
@@ -174,6 +179,8 @@ func Expression(metric string, scope Scope) (string, bool) {
 		return `(probe_ssl_earliest_cert_expiry` + sel + ` - time()) / 86400`, true
 	case "prisme_host_metrics_age_seconds":
 		return `time() - prisme_host_metrics_generated_seconds` + sel, true
+	case "prisme_ssh_metrics_age_seconds":
+		return `time() - prisme_ssh_metrics_generated_seconds` + sel, true
 	}
 	return "", false
 }

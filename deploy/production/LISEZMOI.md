@@ -8,7 +8,7 @@ décisions et preuves : [docs/PHASE_10_VPS.md](../../docs/PHASE_10_VPS.md).
 | `compose.yml` | Pile `prisme` : PostgreSQL 17, migration, API (mode `identity`), VictoriaMetrics (30 j), Loki (30 j), Alloy ; outil `pki` à la demande. Aucun port publié. |
 | `ovh-mantara.env` | Réglages **non secrets** : origine WebAuthn, groupes des sockets Docker (986) et containerd (0). |
 | `config.alloy`, `observability.json` | Collecte (hôte, conteneurs, sites) et règles : voir « Collecte de l'hôte et des sites ». |
-| `install-host.sh`, `host/` | Collecteurs installés sur l'hôte (inventaire pour l'agent, état des conteneurs pour Alloy) et leurs unités systemd. |
+| `install-host.sh`, `host/` | Collecteurs installés sur l'hôte (inventaire pour l'agent, état des conteneurs et menaces SSH pour Alloy) et leurs unités systemd. |
 | `init-secrets.sh` | Crée **une fois** `/opt/projects/prisme/secrets` (`root:10001`, `0640`) : mots de passe, CA privée, certificat de l'API. Refuse de remplacer. |
 | `renew-server-cert.sh` | Réémet le certificat interne de l'API depuis la même CA et redémarre l'API. |
 | `edge-bloc.caddy` | Bloc à ajouter au Caddy mutualisé, avec le certificat **public** de la CA (`pki ca-base64`). |
@@ -44,6 +44,28 @@ P="docker compose --env-file deploy/production/ovh-mantara.env -f deploy/product
   `observability.json`, puis `sudo $P up -d --wait`.
 - **Exercice** (aucune panne réelle) : `sudo touch /etc/prisme/drill` ouvre l'incident
   `PRISME-DRILL` en moins d'une minute ; `sudo rm /etc/prisme/drill` le résout.
+
+## Menaces SSH (étape 5)
+
+- `prisme-ssh-metrics.timer` (30 s) lance `ssh_metrics.py` sous `prisme-collector`, **sans
+  Docker** et avec le groupe `adm` pour cette seule unité (journal de `ssh.service`,
+  `/var/log/fail2ban.log`), et écrit `/var/lib/prisme-metrics/ssh.prom`. Aucune adresse n'entre
+  dans les mesures : une connexion inconnue est décrite dans
+  `journalctl -u prisme-ssh-metrics` (adresse, compte, clé).
+- **Adresses connues** : `/etc/prisme/ssh-known-ips` (`root:prisme-observation`, `0640`), une
+  adresse ou un réseau par ligne, `#` pour les commentaires ; **hors dépôt**, validé par Alexy.
+  Sans ce fichier, le collecteur ne démarre pas. Toute connexion réussie depuis une autre adresse
+  (mobile, déplacement, déploiement GitHub Actions) ouvre `VPS-SSH-UNKNOWN-LOGIN`.
+- Règles : connexion réussie depuis une adresse inconnue (critique, se résout 30 min après),
+  fail2ban arrêté (critique, après 1 min), plus de 150 échecs sur 10 min maintenus 10 min
+  (avertissement), fail2ban actif mais ne détectant aucun de 20 échecs ou plus (avertissement,
+  après 15 min), collecte SSH arrêtée (avertissement). Les deux critiques seront `urgent` dans la
+  configuration des notifications.
+- **Exercices** (n'ajoutent que des alarmes, n'en masquent aucune) : `sudo touch` puis `sudo rm`
+  de `/etc/prisme/drill-ssh-unknown-login`, `drill-fail2ban-down`, `drill-ssh-failures`
+  (incident après 10 min) ou `drill-fail2ban-blind` (après 15 min).
+- Essai à blanc sans rien écrire (sortie à l'écran) :
+  `sudo setpriv --reuid=prisme-collector --regid=prisme-observation --groups=prisme-observation,adm --inh-caps=-all python3 -I /usr/local/lib/prisme/ssh_metrics.py /etc/prisme/ssh-known-ips -`.
 
 ## Agent d'inventaire (après la première passkey)
 

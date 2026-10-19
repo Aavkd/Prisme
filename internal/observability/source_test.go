@@ -107,7 +107,11 @@ func TestRuleMetricsKeepOriginalSampleTimestamps(t *testing.T) {
 	if v := age(sampled, float64(sampled.Unix()-240)); v != 240 {
 		t.Fatalf("host collector age %v", v)
 	}
-	for _, m := range []string{"probe_ssl_expiry_days", "prisme_host_metrics_age_seconds", "node_filesystem_avail_bytes", "node_memory_SwapFree_bytes", "prisme_containers_problem", "prisme_drill", "probe_success"} {
+	if v := ruleTransform(t, "prisme_ssh_metrics_age_seconds")(sampled, float64(sampled.Unix()-75)); v != 75 {
+		t.Fatalf("SSH collector age %v", v)
+	}
+	for _, m := range []string{"probe_ssl_expiry_days", "prisme_host_metrics_age_seconds", "node_filesystem_avail_bytes", "node_memory_SwapFree_bytes", "prisme_containers_problem", "prisme_drill", "probe_success",
+		"prisme_ssh_failures_10m", "prisme_ssh_unknown_logins_30m", "prisme_fail2ban_up", "prisme_fail2ban_blind", "prisme_ssh_metrics_age_seconds"} {
 		if !RuleMetric(m) {
 			t.Fatalf("%s refused in rules", m)
 		}

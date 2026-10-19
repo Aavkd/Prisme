@@ -1,0 +1,32 @@
+[Unit]
+Description=Prisme SSH threat gauges for Alloy (ssh.service journal and fail2ban, read-only)
+After=fail2ban.service
+# Without the list validated by Alexy every login would look unknown.
+ConditionPathExists=/etc/prisme/ssh-known-ips
+
+[Service]
+Type=oneshot
+User=prisme-collector
+Group=prisme-observation
+# adm reads the journal (ACL on /var/log/journal) and /var/log/fail2ban.log, for
+# this unit only: the account itself is not changed.
+SupplementaryGroups=adm
+# The account belongs to the docker group for the other collectors: not here.
+InaccessiblePaths=-/run/docker.sock -/var/run/docker.sock -/run/containerd
+# Same directory as host.prom, read by Alloy's textfile collector.
+StateDirectory=prisme-metrics
+StateDirectoryMode=0755
+UMask=0022
+ExecStart=/usr/bin/python3 -I /usr/local/lib/prisme/ssh_metrics.py /etc/prisme/ssh-known-ips /var/lib/prisme-metrics
+TimeoutStartSec=25
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX
