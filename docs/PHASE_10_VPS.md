@@ -768,3 +768,44 @@ les actions A à C d'Alexy ne sont pas encore faites. Aucun redémarrage en atte
   l'API passe par Git Bash, les essais utilisent `ops/`, et l'agent ne lit jamais un secret
   (Alexy les manipule dans son propre terminal).
 - Prompt de reprise : [PROMPT_REPRISE_PORTABLE.md](PROMPT_REPRISE_PORTABLE.md).
+
+## Reprise sur le portable `Portable_Alexy` (22/10/2026)
+
+### Relevés (lecture seule, 16:55 UTC)
+
+| Élément | Constat |
+|---|---|
+| Dépôt | `D:\Documents\MANTARA\Prisme`, `main` avancé de `5e052c1` à `4c18532` (`git pull --ff-only`), arbre propre. Identité Git `Alexy`. |
+| Outils | `git` 2.46, `gh` connecté (`Aavkd`), Go 1.26.8, Flutter 3.38.5 / Dart 3.10.4, Docker 29.6.1, `adb` présent (aucun appareil branché au relevé). Mode développeur Windows actif. |
+| `flutter doctor` | Android SDK 36.1.0, mais **cmdline-tools absents** et **licences non vérifiées** (à voir au moment de l'APK). |
+| Firebase | `apps/prisme_client/android/app/google-services.json` présent (ignoré par Git, non ouvert). Une copie du compte de service complet est à la racine du dépôt (ignorée par Git, non ouverte) : à supprimer en H. |
+| Accès VPS | alias `ovh-mantara` identique à la tour ; `ssh -o BatchMode=yes ovh-mantara true` réussit, sans incident `VPS-SSH-UNKNOWN-LOGIN` (adresse du portable connue). |
+| VPS (`etat.sh`, 16:57) | pile saine, 67 règles saines, 0 incident ouvert, notifications non actives, 0 passkey / appareil / agent ; RAM disponible 4 973 Mo, swap 91 Mo, `/` 49 %. |
+
+### A. Première passkey (fait, 17:04 UTC)
+
+Client Windows compilé sur le portable (`flutter build windows --release`,
+`PRISME_IDENTITY=true`, `PRISME_API_URL=https://prisme.mantara.fr`) et lancé. Alexy a lu le
+secret d'initialisation dans son propre terminal, créé la passkey avec Windows Hello et noté les
+codes de secours hors du portable. Vérifié (`etat.sh`) : **1 passkey, 1 appareil actif**, aucune
+règle non saine. Le critère « connexion passkey OK depuis le portable » de l'étape 3 est atteint ;
+le S24 suit en C.
+
+### C bis. Agent d'inventaire (fait, 17:10 UTC, accord d'Alexy)
+
+- Premier essai de dépôt du jeton : `install: invalid group: '10001'`. Le VPS a les coreutils
+  **uutils** 0.8.0 : `install -g` (et vraisemblablement `chgrp`) refuse un groupe numérique sans
+  nom, alors que `chown root:10001` fonctionne (déjà utilisé par `init-secrets.sh`). Rien n'avait
+  été créé. Deuxième essai (`ssh -t`, collage puis Ctrl-D) : fichier **vide** resté en
+  `root:root`, la saisie ayant été interrompue ; l'agent n'a pas été lancé. Troisième essai, par
+  le presse-papiers (`Get-Clipboard | ssh …`, sans affichage) : 66 octets, `0640`,
+  `root:10001`. Procédure et LISEZMOI corrigés en conséquence (C bis et D : `chown root:10001`).
+- `sudo $P --profile agent up -d --build --no-deps --wait agent` (clone toujours à `e4ec993` :
+  depuis, seul un test Go a changé) : image construite depuis le cache, volume
+  `prisme_agent_identity` créé, `prisme-agent-1` démarré. RAM disponible minimale 4 840 Mo, swap
+  91 Mo. `--no-deps` : l'API n'a pas été touchée.
+- Vérifié : `etat.sh` → **1 agent enrôlé** ; certificat et clé dans le volume ; jeton supprimé
+  (`secrets/agent/` vide) ; agent à 3 Mo (limite 64) ; 43 conteneurs actifs (42 + l'agent), 67
+  règles saines, RAM disponible 4 907 Mo.
+- Alexy confirme que la vue **Serveurs** du portable montre `ovh-mantara` et ses conteneurs avec
+  des mesures récentes. **Critère de l'étape 4 atteint** (le dernier point ouvert).

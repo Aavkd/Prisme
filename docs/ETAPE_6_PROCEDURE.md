@@ -77,13 +77,18 @@ plus après les essais : voir H.
 
 ### C bis. Agent d'inventaire (reste de l'étape 4) — Alexy puis agent
 
-1. Dans Prisme (portable, connecté), vue **Serveurs** : générer un **jeton d'enrôlement**
-   (valable 10 minutes, ne pas le coller dans le chat).
-2. Dans **son propre terminal** (pas celui de l'agent), coller le jeton puis Entrée et Ctrl-D :
-   `ssh -t ovh-mantara "cd /opt/projects/prisme && sudo install -d -m 0750 -o root -g 10001 secrets/agent && sudo sh -c 'umask 027; cat > secrets/agent/token' && sudo chgrp 10001 secrets/agent/token"`
-3. Agent, après « oui » : `sudo $P --profile agent up -d --build --wait agent` (depuis
-   `/opt/projects/prisme`), puis vérifier la vue Serveurs (VPS et conteneurs avec mesures
-   fraîches : critère encore ouvert de l'étape 4), puis `sudo rm secrets/agent/token`.
+1. Dans Prisme (portable, connecté), vue **Serveurs** → *Enrôler un serveur* : copier le
+   **jeton d'enrôlement** (valable 10 minutes, ne pas le coller dans le chat).
+2. Aussitôt, dans **son propre PowerShell** (pas celui de l'agent), envoyer le presse-papiers
+   sans l'afficher ; la réponse doit donner une taille non nulle :
+   `Get-Clipboard | ssh ovh-mantara "cd /opt/projects/prisme && sudo mkdir -p -m 0750 secrets/agent && sudo chown root:10001 secrets/agent && sudo sh -c 'umask 027; cat > secrets/agent/token' && sudo chown root:10001 secrets/agent/token && sudo stat -c '%a %s octets' secrets/agent/token"`
+   (L'agent ignore le retour à la ligne final. Le VPS a les coreutils Rust : `install -g 10001`
+   et `chgrp 10001` y refusent un groupe sans nom, `chown root:10001` fonctionne. Coller le
+   jeton dans un `ssh -t` puis Ctrl-D est fragile : un Ctrl-C laisse un fichier vide.)
+3. Agent, après « oui » : `sudo $P --profile agent up -d --build --no-deps --wait agent`
+   (depuis `/opt/projects/prisme` ; `--no-deps` pour ne toucher qu'à l'agent), puis
+   `sudo rm secrets/agent/token` dès que l'identité est dans le volume `agent_identity`, et
+   vérifier la vue Serveurs (VPS et conteneurs avec mesures fraîches : critère de l'étape 4).
 
 ## D. Clé de l'API sur le VPS — agent (après « oui »)
 
@@ -92,7 +97,7 @@ Windows PowerShell 5.1 ; le fichier est lu par `ssh`, jamais affiché), avec `<c
 fichier téléchargé en B.2 :
 
 ```sh
-ssh ovh-mantara "sudo sh -c 'umask 027; cat > /opt/projects/prisme/secrets/fcm-api.json && chgrp 10001 /opt/projects/prisme/secrets/fcm-api.json'" < <clé-api.json>
+ssh ovh-mantara "sudo sh -c 'umask 027; cat > /opt/projects/prisme/secrets/fcm-api.json && chown root:10001 /opt/projects/prisme/secrets/fcm-api.json'" < <clé-api.json>
 ssh ovh-mantara "sudo python3 -c \"import json; d = json.load(open('/opt/projects/prisme/secrets/fcm-api.json')); print(d['type'], d['project_id'], d['client_email'].split('@')[0])\"; sudo stat -c '%a %U:%G' /opt/projects/prisme/secrets/fcm-api.json"
 ```
 

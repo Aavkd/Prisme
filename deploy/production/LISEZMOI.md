@@ -74,10 +74,13 @@ L'agent tourne en conteneur (profil `agent`), sans socket Docker : il lit l'inve
 `prisme-inventory.timer` et joint l'API directement (`https://prisme-api:8443`, mTLS).
 
 1. Depuis la vue Serveurs de Prisme, générer un jeton d'enrôlement (valable dix minutes).
-2. Sur le VPS, le coller soi-même, puis Entrée et Ctrl-D :
-   `sudo install -d -m 0750 -o root -g 10001 secrets/agent && sudo sh -c 'umask 027; cat > secrets/agent/token' && sudo chgrp 10001 secrets/agent/token`
-3. `sudo $P --profile agent up -d --build --wait agent`, puis supprimer `secrets/agent/token`
-   une fois l'agent visible (l'identité reste dans le volume `agent_identity`).
+2. L'écrire soi-même, sans l'afficher (depuis un poste : presse-papiers envoyé par `ssh`, voir
+   [docs/ETAPE_6_PROCEDURE.md](../../docs/ETAPE_6_PROCEDURE.md), C bis) :
+   `sudo mkdir -p -m 0750 secrets/agent && sudo chown root:10001 secrets/agent && sudo sh -c 'umask 027; cat > secrets/agent/token' && sudo chown root:10001 secrets/agent/token`
+   Les coreutils du VPS (uutils) refusent `install -g 10001` et `chgrp 10001` (groupe sans nom) :
+   toujours `chown root:10001`.
+3. `sudo $P --profile agent up -d --build --no-deps --wait agent`, puis supprimer
+   `secrets/agent/token` (l'identité reste dans le volume `agent_identity`).
 
 ## Notifications (étape 6)
 
