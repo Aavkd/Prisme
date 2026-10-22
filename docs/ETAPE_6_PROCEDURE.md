@@ -1,8 +1,10 @@
 # Étape 6 — Alertes sur le S24 et veilleurs : procédure pas à pas
 
 Pour Alexy. Les parties marquées **Alexy** se font sur ses comptes ou ses machines ; les
-parties marquées **agent** sont lancées depuis la tour, après son « oui » sur les commandes
-exactes. Aucun secret (clé, jeton, code) n'est copié dans le chat, le dépôt ou un journal.
+parties marquées **agent** sont lancées par l'agent de code (sur le portable ou la tour), après
+son « oui » sur les commandes exactes. Aucun secret (clé, jeton, code, secret d'initialisation)
+n'est copié dans le chat, le dépôt ou un journal, ni lu par l'agent : Alexy les manipule dans
+**son propre terminal** ou navigateur.
 
 Ordre imposé : chaque partie a besoin de la précédente.
 
@@ -11,16 +13,17 @@ Ordre imposé : chaque partie a besoin de la précédente.
 | A. Première passkey | Alexy (portable) | — |
 | B. Comptes Firebase limités | Alexy (navigateur) | — |
 | C. Application sur le S24 | Alexy (portable + S24) | A |
+| C bis. Agent d'inventaire | Alexy puis agent | A |
 | D. Clé de l'API sur le VPS | agent | B |
-| E. Veilleur de la tour | Alexy (PowerShell administrateur) | B, C |
+| E. Veilleur de la tour | Alexy, **sur la tour** (PowerShell administrateur) | B, C |
 | F. Veilleur du portable | Alexy | B, C |
 | G. Essais (critère de l'étape) | Alexy + agent | C, D, E |
 | H. Révocation de l'ancienne clé complète | Alexy | G réussi |
 
 ## A. Première passkey (portable) — Alexy
 
-1. Lire le secret d'initialisation soi-même, sans le copier ailleurs :
-   `ssh ovh-mantara 'sudo cat /opt/projects/prisme/secrets/identity-secret'`.
+1. Dans **son propre terminal** (jamais par l'agent, qui verrait le secret), le lire sans le
+   copier ailleurs : `ssh ovh-mantara 'sudo cat /opt/projects/prisme/secrets/identity-secret'`.
 2. Depuis `apps/prisme_client` :
    `flutter run -d windows --dart-define=PRISME_IDENTITY=true --dart-define=PRISME_API_URL=https://prisme.mantara.fr`
 3. Bouton passkey → page de connexion dans le navigateur → « Créer ou récupérer » → secret
@@ -42,8 +45,10 @@ Projet Google Cloud du Firebase existant (`prisme-49202`), sur
    sur le projet ; aucun utilisateur autorisé. Puis *Clés → Ajouter une clé → JSON* : le fichier
    se télécharge. Le garder dans `Téléchargements` (il sera envoyé au VPS en D puis supprimé).
 3. **Compte des veilleurs** : même chose avec `prisme-watchdog-fcm` (« Veilleurs Prisme, envoi
-   FCM seul »), puis **deux clés JSON** : une pour la tour, une pour le portable (noter l'ID de
-   clé affiché pour chacune ; une machine perdue = une seule clé à supprimer).
+   FCM seul »), puis **une clé JSON par PC**, créée **depuis le navigateur du PC qui l'utilisera**
+   (aucune clé ne voyage d'une machine à l'autre) : celle du portable maintenant, celle de la
+   tour au moment de E, depuis la tour. Noter l'ID de clé affiché pour chacune : une machine
+   perdue = une seule clé à supprimer.
 4. Si la création de clé est interdite (« iam.disableServiceAccountKeyCreation »), s'arrêter
    et le signaler : c'est une règle d'organisation à lever pour ce projet.
 
@@ -70,13 +75,21 @@ plus après les essais : voir H.
    attend 7 h.
 5. Toujours sur le S24 : vérifier que l'écran Serveurs et les incidents s'affichent.
 
-Reste aussi l'agent d'inventaire de l'étape 4 (jeton depuis la vue Serveurs, voir
-`deploy/production/LISEZMOI.md`, « Agent »).
+### C bis. Agent d'inventaire (reste de l'étape 4) — Alexy puis agent
+
+1. Dans Prisme (portable, connecté), vue **Serveurs** : générer un **jeton d'enrôlement**
+   (valable 10 minutes, ne pas le coller dans le chat).
+2. Dans **son propre terminal** (pas celui de l'agent), coller le jeton puis Entrée et Ctrl-D :
+   `ssh -t ovh-mantara "cd /opt/projects/prisme && sudo install -d -m 0750 -o root -g 10001 secrets/agent && sudo sh -c 'umask 027; cat > secrets/agent/token' && sudo chgrp 10001 secrets/agent/token"`
+3. Agent, après « oui » : `sudo $P --profile agent up -d --build --wait agent` (depuis
+   `/opt/projects/prisme`), puis vérifier la vue Serveurs (VPS et conteneurs avec mesures
+   fraîches : critère encore ouvert de l'étape 4), puis `sudo rm secrets/agent/token`.
 
 ## D. Clé de l'API sur le VPS — agent (après « oui »)
 
-Depuis la tour (le fichier est lu par `ssh`, jamais affiché), avec `<clé-api.json>` le fichier
-téléchargé en B.2 :
+Depuis **Git Bash** sur le PC où la clé a été téléchargée (la redirection `<` n'existe pas dans
+Windows PowerShell 5.1 ; le fichier est lu par `ssh`, jamais affiché), avec `<clé-api.json>` le
+fichier téléchargé en B.2 :
 
 ```sh
 ssh ovh-mantara "sudo sh -c 'umask 027; cat > /opt/projects/prisme/secrets/fcm-api.json && chgrp 10001 /opt/projects/prisme/secrets/fcm-api.json'" < <clé-api.json>
@@ -97,8 +110,11 @@ sans notifications). Alexy supprime ensuite l'original de la clé dans `Téléch
 
 ## E. Veilleur de la tour — Alexy (PowerShell administrateur)
 
-Prérequis : C fait (le S24 est abonné), clé « tour » de B.3 téléchargée. Clic droit sur
-PowerShell → *Exécuter en tant qu'administrateur*, puis :
+Prérequis : C fait (le S24 est abonné). **Sur la tour** : créer la clé « tour » du compte
+`prisme-watchdog-fcm` depuis le navigateur de la tour (B.3), mettre à jour le dépôt
+(`cd D:\MANTARA\Prisme; git pull --ff-only`) et, si le code du veilleur a changé, recompiler
+`watchdog.exe` (`. D:\tools\prisme-env.ps1; go build -trimpath -ldflags="-s -w" -o .dev\bin\windows-amd64\watchdog.exe ./cmd/watchdog`).
+Clic droit sur PowerShell → *Exécuter en tant qu'administrateur*, puis :
 
 ```powershell
 cd D:\MANTARA\Prisme\deploy\watchdog\windows
@@ -129,8 +145,12 @@ depuis le portable. Supprimer ensuite `<clé-portable.json>` et `$env:TEMP\watch
 
 ## G. Essais (critère de l'étape 6) — Alexy + agent, à un moment où Alexy regarde le S24
 
-1. **Chaîne de l'API** : `sudo touch /etc/prisme/drill` → notification `PRISME-DRILL` sur le S24
-   en ≈ 1 min, qui ouvre la bonne fiche ; `sudo rm /etc/prisme/drill` → résolution.
+Scripts : `deploy/production/ops/` (voir son LISEZMOI), lancés par
+`ssh -o BatchMode=yes ovh-mantara 'bash -s' < deploy/production/ops/<script>.sh`.
+
+1. **Chaîne de l'API** : `exercice-drill.sh` (crée puis supprime `/etc/prisme/drill`) →
+   notification `PRISME-DRILL` sur le S24 en ≈ 1 min, qui ouvre la bonne fiche, puis résolution.
+   Si la notification arrive pendant les horaires silencieux, elle attend 7 h (non urgente).
 2. **Nuit simulée** : sur le S24, horaires réglés pour couvrir l'heure actuelle ; drapeaux
    `drill-ssh-unknown-login` (urgent) **et** `drill` (non urgent) → seule l'alerte urgente
    arrive tout de suite ; l'autre attend la fin des horaires. Retirer les drapeaux, remettre

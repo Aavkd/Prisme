@@ -3,6 +3,10 @@
 > À donner à un agent de code ouvert sur la tour `DESKTOP-UCQ8SRH`, dans `D:\MANTARA\Prisme`.
 > Il prend la suite d'une session qui a mené les étapes 1 à 4 de
 > [PROMPT_DEPLOIEMENT_VPS.md](PROMPT_DEPLOIEMENT_VPS.md). Cette session est terminée.
+>
+> **Mise à jour du 22/10/2026** : étapes 5 faite et 6 préparée (tableau ci-dessous). Pour
+> reprendre sur le **PC portable**, utiliser [PROMPT_REPRISE_PORTABLE.md](PROMPT_REPRISE_PORTABLE.md),
+> qui reprend ces règles et pièges avec les instructions manuelles d'Alexy.
 
 ## 1. À lire d'abord, dans cet ordre
 
@@ -48,7 +52,7 @@ Alexy n'est pas développeur. Parler **français**, simplement, annoncer avant d
 | 2 Installation VPS | **Faite.** Pile `prisme` dans `/opt/projects/prisme` (5 services sains, aucun port publié). |
 | 3 Exposition | **Faite côté serveur** : `https://prisme.mantara.fr` (Let's Encrypt jusqu'au 17/01/2027), anonyme = `/readyz`, `/auth` et 401. **Reste** : première passkey d'Alexy (portable puis S24) — non vérifiée. |
 | 4 Collecte réelle | **Faite** : 28 sites, 41 conteneurs, disque/RAM/swap, 62 règles saines, exercice réussi. **Reste** : commande 6 (agent d'inventaire), qui attend la passkey et un jeton d'enrôlement. |
-| 5 Menaces SSH | **Faite** le 19/10 : collecteur `ssh_metrics.py` en service, 67 règles saines, exercice réussi (4 incidents ouverts puis résolus), fail2ban corrigé. **Reste** : observation 24 h (`D:\tools\vps-scripts\etape5-observation.sh` après le 20/10 21:20 UTC). |
+| 5 Menaces SSH | **Faite** : collecteur `ssh_metrics.py` en service, 67 règles saines, exercice réussi, fail2ban corrigé ; **observation close le 22/10 : 0 faux positif en 67 h**. Scripts d'exploitation dans `deploy/production/ops/`. |
 | 6 FCM S24 + watchdog | **Préparée en local** (19/10) : `notifications.json` (67 règles, 30 urgentes : SSH, fail2ban, 28 sites), `compose.notifications.yml`, `install-watchdog.ps1` essayé à blanc. Suite : `docs/ETAPE_6_PROCEDURE.md` (actions d'Alexy A à C, puis D à H). |
 | 7 Qualification + sauvegarde | À faire. |
 | 8 Documentation + mémoire | À faire (`README.md`, dépôt `Aavkd/mantara-docs`). |

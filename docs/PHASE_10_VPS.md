@@ -459,7 +459,7 @@ Vérifications finales (15:17 UTC) :
 s'est déclenchée puis résolue. **Non vérifié** : la vue Serveurs (VPS et conteneurs avec mesures
 fraîches) — elle attend l'enrôlement de l'agent, donc la première passkey d'Alexy (commande 6).
 
-## Étape 5 — Menaces SSH (en service ; observation 24 h en cours)
+## Étape 5 — Menaces SSH (faite ; observation close le 22/10, sans faux positif)
 
 ### Relevés en lecture seule (19/10/2026, 15:55 → 16:20 UTC)
 
@@ -735,3 +735,36 @@ des notifications (étape 6).
 2. Agent, après « oui » : clé de l'API sur le VPS et recréation de l'API (D).
 3. Alexy : veilleurs de la tour (E) et du portable (F).
 4. Ensemble : essais du critère (G), puis révocation de l'ancienne clé complète (H).
+
+## Point du 22/10/2026 (tour, avant la reprise sur le portable)
+
+### Observation de l'étape 5 (lecture seule, 22/10 16:46 UTC)
+
+Depuis la fin de l'exercice (19/10 21:19 UTC, ≈ 67 h) : **0 incident** des règles SSH et
+fail2ban, aucune connexion inconnue, aucune erreur de collecte ; maximum de **17 échecs** sur
+10 min hors exercice sur les dernières 24 h (seuil 150) ; fail2ban : 85 bans au total, 9 actifs.
+67 règles saines, **0 incident d'aucune règle** depuis le 19/10 21:20 UTC (sites compris : un
+seul relevé de site en échec en 7 h le 19/10, sans incident). RAM disponible 4,9 Go, swap 91 Mo,
+disque `/` 49 %. **Critère de l'étape 5 atteint : aucun faux positif sur 24 h (en fait 67 h).**
+
+### État relevé (`deploy/production/ops/etat.sh`)
+
+Pile Prisme démarrée depuis le redémarrage du VPS (19/10 20:05), API et PostgreSQL `healthy` ;
+clone du VPS à `e4ec993` (les fichiers des notifications arriveront par `git pull` en D) ;
+notifications **non actives**, clé FCM de l'API absente ; **0 passkey, 0 appareil, 0 agent** :
+les actions A à C d'Alexy ne sont pas encore faites. Aucun redémarrage en attente.
+
+### Préparé pour la reprise sur le portable
+
+- `deploy/production/ops/` : scripts d'exploitation lancés par
+  `ssh ovh-mantara 'bash -s' < …` depuis n'importe quel poste (jusque-là seulement dans
+  `D:\tools\vps-scripts` sur la tour) : `etat.sh` (nouveau), `verif-collecte.sh`, `verif-ssh.sh`,
+  `observation-ssh.sh` (date en paramètre), `codes-sites.sh`, `avec-memoire.sh`,
+  `exercice-drill.sh` et `exercice-ssh.sh` (ces deux derniers modifient le VPS : accord requis).
+  Les scripts contenant des adresses (correction fail2ban, installation de l'étape 5, enquête)
+  restent hors dépôt, sur la tour. La CI vérifie leur syntaxe.
+- `docs/ETAPE_6_PROCEDURE.md` adaptée : la clé FCM de chaque veilleur est créée depuis le PC
+  qui l'utilise (aucune clé ne voyage), l'agent d'inventaire suit la passkey (C bis), la clé de
+  l'API passe par Git Bash, les essais utilisent `ops/`, et l'agent ne lit jamais un secret
+  (Alexy les manipule dans son propre terminal).
+- Prompt de reprise : [PROMPT_REPRISE_PORTABLE.md](PROMPT_REPRISE_PORTABLE.md).
