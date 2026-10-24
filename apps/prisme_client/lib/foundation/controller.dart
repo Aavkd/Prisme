@@ -211,9 +211,18 @@ class FoundationController extends ChangeNotifier {
         DateTime.now().isBefore(expires)) {
       await Future<void>.delayed(const Duration(seconds: 3));
       if (_disposed || generation != _generation) return;
-      final result = await api.pollBrowser(
-        PollRequest(flow_id: flow.flow_id, poll_token: flow.poll_token),
-      );
+      final PollResult result;
+      try {
+        result = await api.pollBrowser(
+          PollRequest(flow_id: flow.flow_id, poll_token: flow.poll_token),
+        );
+      } on ApiFailure catch (failure) {
+        // Android suspends the app while the browser is in front: a poll cut
+        // short by the suspension (or a brief network loss) is retried until
+        // the flow expires, otherwise an approved login is silently lost.
+        if (failure.code == 'timeout' || failure.code == 'offline') continue;
+        rethrow;
+      }
       if (result.status == 'approved') {
         if (_disposed || generation != _generation) return;
         waitingForPasskey = false;
